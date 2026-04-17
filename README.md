@@ -51,7 +51,7 @@ LoanGuard/
 
 ### 1. Repo'yu klonlayın
 ```bash
-git clone https://github.com/<KULLANICI_ADI>/LoanGuard.git
+git clone https://github.com/nesli0/LoanGuard.git
 cd LoanGuard
 ```
 
@@ -74,7 +74,7 @@ pip install -r requirements.txt
 ### 4. Veri setini indirin
 Veri seti boyutu nedeniyle Git'e dahil edilmemiştir. Aşağıdaki Google Drive linkinden indirip `data/raw/` klasörüne yerleştirin:
 
-> 📥 **[Google Drive — Loan_default.csv](https://drive.google.com/YOUR_LINK_HERE)**
+> 📥 **[Google Drive — Loan_default.csv](https://drive.google.com/file/d/13g8m5i0QaeabfaASYvF-NQQUZs8yGqAB/view?usp=sharing)**
 
 ```bash
 # Dosya şu konumda olmalı:
