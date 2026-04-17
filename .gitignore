@@ -1,0 +1,44 @@
+# ============================================
+# LoanGuard .gitignore
+# ============================================
+
+# --- Veri dosyaları (büyük boyutlu — Drive ile paylaşılır) ---
+data/raw/*.csv
+data/processed/*.csv
+data/external/*
+
+# --- Model artifact'leri ---
+models/*.joblib
+models/*.pkl
+models/*.h5
+
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Ortam değişkenleri ---
+.env
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Raporlar (isteğe bağlı — büyük görseller varsa) ---
+# reports/figures/*.png

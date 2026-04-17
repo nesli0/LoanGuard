@@ -1,0 +1,46 @@
+# ============================================
+# LoanGuard - Model Hiperparametreleri
+# ============================================
+
+# Veri bölme
+data:
+  test_size: 0.2
+  random_state: 42
+  stratify_column: "Default"
+
+# Aşama 1: Anomali Tespiti
+anomaly_detection:
+  model: "IsolationForest"
+  params:
+    n_estimators: 100
+    contamination: 0.05
+    random_state: 42
+    n_jobs: -1
+
+# Aşama 2: Risk Skorlama
+risk_scoring:
+  model: "XGBClassifier"
+  params:
+    n_estimators: 300
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    scale_pos_weight: 7.6  # 225694 / 29653 ≈ 7.6 (sınıf dengesizliği)
+    random_state: 42
+    eval_metric: "auc"
+    use_label_encoder: false
+
+# Aşama 3: Faiz Optimizasyonu
+interest_optimization:
+  base_rate: 0.05
+  risk_premium_max: 0.15
+  method: "linear"  # linear | sigmoid | custom
+
+# Ön İşleme
+preprocessing:
+  numeric_scaler: "StandardScaler"
+  categorical_encoder: "LabelEncoder"
+  handle_outliers: true
+  outlier_method: "IQR"  # IQR | zscore
+  outlier_threshold: 1.5
