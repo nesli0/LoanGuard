@@ -6,6 +6,8 @@
 data/raw/*.csv
 data/processed/*.csv
 data/external/*
+# Klasörün repoda görünmesi için (yukarıdaki satır .gitkeep'i de ignore eder)
+!data/external/.gitkeep
 
 # --- Model artifact'leri ---
 models/*.joblib
