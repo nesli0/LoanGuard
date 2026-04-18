@@ -8,86 +8,58 @@ Kredi başvurusu verisini **anomali tespiti → risk skoru → faiz önerisi** s
 Girdi → Isolation Forest (anomali) → XGBoost (risk) → Faiz / limit optimizasyonu → Çıktı + SHAP
 ```
 
-## Repo yapısı
+## Proje Yapısı
 
 ```
 LoanGuard/
-├── data/
-│   ├── raw/           # Ham veri (Git’te yalnızca yer tutucu; dosya Drive’dan)
-│   ├── processed/     # Eğitim/test split vb. (büyük CSV’ler Git’te değil)
-│   └── external/      # Harici tablolar / referanslar (içerik Git’te değil)
-├── notebooks/         # EDA, ön-işleme, model denemeleri (çıktıları repo’ya koymayın)
-├── src/               # data, features, models, pipeline, explainability, api
-├── models/            # Eğitilmiş ağırlıklar (.joblib — Git’te değil, Drive)
-├── reports/           # figürler, metrik JSON (isteğe bağlı Git)
-├── configs/
-├── tests/
-└── docs/
+├── data/                  # Veri dosyaları
+│   ├── raw/               # Ham veri (değiştirilmez)
+│   ├── processed/         # Temizlenmiş veri (modeller buradan okur)
+│   └── external/          # Harici kaynaklar
+├── notebooks/             # Jupyter notebook'lar (numaralı sırayla)
+├── src/                   # Kaynak kodu (modüler Python paketleri)
+│   ├── data/              # Veri yükleme & ön-işleme
+│   ├── features/          # Feature engineering
+│   ├── models/            # Model tanımları & eğitim
+│   ├── pipeline/          # Uçtan uca inference pipeline
+│   ├── explainability/    # SHAP açıklanabilirlik
+│   └── api/               # FastAPI backend
+├── models/                # Eğitilmiş model dosyaları (.joblib)
+├── reports/               # Çıktılar & raporlar
+│   ├── figures/           # Grafikler (.png)
+│   └── metrics/           # Performans metrikleri (.json)
+├── configs/               # Konfigürasyon dosyaları
+├── tests/                 # Birim & entegrasyon testleri
+└── docs/                  # Dokümantasyon
 ```
 
-Boş klasörler için `.gitkeep` kullanılır. **`data/external/.gitkeep`** artık `.gitignore` istisnasıyla repoya dahil edilir (`data/external/*` tüm dosyayı susturduğu için önceden GitHub’a gitmiyordu).
+> **Not:** Git boş klasörleri takip etmez. `models/` ve `reports/metrics/` gibi klasörlerin GitHub'da görünebilmesi için içlerine `.gitkeep` adlı boş bir dosya eklenmiştir. Bu dosyanın kendisi bir şey yapmaz; sadece klasörün Git tarafından takip edilmesini sağlayan bir sektör konvansiyonudur.
 
-## Google Drive önerilen klasör yapısı
+Notebook'ları **herkesin sıfırdan çalıştırması gerekmez**. Takımla paylaştığınız **Google Drive** linkinden ham veri, işlenmiş veriler, eğitilmiş modeller ve rapor/figür dosyalarını indirip bu yapıdaki ilgili klasörlere koymanız yeterlidir. Böylece herkesin notebook'u yeniden çalıştırıp aynı grafikleri üretmesi ve dosyaları tekrar yüklemesi gerekmez. Notebook'ları yalnızca akışı incelemek veya kendi denemenizi yapmak için kullanabilirsiniz.
 
-Takımın ortak “kaynak gerçeği” için Drive’da tek kök klasör açıp yerel `LoanGuard/` ile aynı mantığı korumanız yeterli:
+## Kurulum
 
-```
-LoanGuard_Drive/
-├── data/
-│   ├── raw/
-│   │   └── Loan_default.csv
-│   ├── processed/
-│   │   ├── X_train.csv
-│   │   ├── X_test.csv
-│   │   ├── y_train.csv
-│   │   └── y_test.csv
-│   └── external/
-│       └── (harici CSV / referans dosyalar)
-├── models/
-│   ├── isolation_forest.joblib
-│   ├── xgboost_model.joblib
-│   └── (diğer model dosyaları — kişi başı seçilen modele göre)
-├── reports/
-│   ├── figures/
-│   └── metrics/
-└── notebook_outputs/
-    ├── 01_EDA/
-    ├── 02_preprocessing/
-    └── 03_modeling/
-```
-
-- **data/** — büyük veri; repo yerine Drive.
-- **models/** — eğitilmiş dosyalar; repo `.gitignore` ile dışarıda.
-- **notebook_outputs/** — notebook’ları kim çalıştırırsa ürettiği HTML, PNG, CSV özetleri buraya; repoya commit etmeyin, Drive linki veya kısa not yeterli.
-
-## Kurulum (geliştirici)
+1. Repo'yu klonlayın
 
 ```bash
 git clone https://github.com/nesli0/LoanGuard.git
 cd LoanGuard
-python -m venv .venv
-# Windows: .venv\Scripts\activate
-pip install -r requirements.txt
 ```
 
-Ham veriyi Drive’dan indirip `data/raw/Loan_default.csv` konumuna koyun (veya takımın agreed path’ine). İşlenmiş veri ve modeller yoksa, bunları notebook veya script’lerle üretip **Drive’daki** `data/processed/` ve `models/` ile senkron tutun.
-
-## API ve arayüz
+2. Sanal ortam oluşturun
 
 ```bash
-uvicorn src.api.main:app --reload   # http://localhost:8000/docs
-streamlit run src/app.py
-docker-compose up --build
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
+source .venv/bin/activate
 ```
 
-## Takım çalışması (yarın ve sonrası)
+3. Bağımlılıkları yükleyin
 
-Şu an `main` doğrudan kullanılabilir; ekip büyüyünce öneri:
-
-- Her kişi **bir model / bir dikey** için `feature/<kısa-isim>` dalı açsın (ör. `feature/xgboost-risk`, `feature/isolation-forest`).
-- `.joblib` ve büyük CSV’leri **yalnızca Drive**’da tutun; PR’larda kod + küçük config değişikliği.
-- Model dosya adları için tek sözlük kullanın (ör. `models/xgboost_model.joblib`, `models/isolation_forest.joblib`); yeni model ekleyen Drive’a ve bu README’deki Drive ağacına aynı isimle koysun.
-
-## Veri seti (özet)
-
-- **Loan default** verisi; hedef: `Default`. Sınıf dengesiz (~%88 / ~%12). Detay ve lisans bilgisi için proje içi `docs/` veya notebook notlarına bakın.
+```bash
+pip install -r requirements.txt
+```
