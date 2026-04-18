@@ -45,6 +45,8 @@ LoanGuard/
 └── docs/                  # Dokümantasyon
 ```
 
+> **Not:** Git boş klasörleri takip etmez. `models/` ve `reports/metrics/` gibi klasörlerin GitHub'da görünebilmesi için içlerine `.gitkeep` adlı boş bir dosya eklenmiştir. Bu dosyanın kendisi bir şey yapmaz; sadece klasörün Git tarafından takip edilmesini sağlayan bir sektör konvansiyonudur.
+
 ---
 
 ## 🚀 Kurulum
@@ -72,20 +74,14 @@ pip install -r requirements.txt
 ```
 
 ### 4. Veri setini indirin
-Veri seti boyutu nedeniyle Git'e dahil edilmemiştir. Aşağıdaki Google Drive linkinden indirip `data/raw/` klasörüne yerleştirin:
-
-> 📥 **[Google Drive — Loan_default.csv](https://drive.google.com/file/d/13g8m5i0QaeabfaASYvF-NQQUZs8yGqAB/view?usp=sharing)**
+Veri seti boyutu nedeniyle Git'e dahil edilmemiştir. `data/raw/` klasörüne yerleştirin:
 
 ```bash
 # Dosya şu konumda olmalı:
 data/raw/Loan_default.csv
 ```
 
-### 5. Ortam değişkenleri (isteğe bağlı)
-```bash
-cp .env.example .env
-# .env dosyasını düzenleyin
-```
+Not: `data/processed/` ve `models/` klasörlerindeki dosyalar notebook'lar çalıştırıldığında otomatik oluşur.
 
 ---
 
@@ -94,8 +90,13 @@ cp .env.example .env
 ### Jupyter Notebook'lar
 ```bash
 jupyter notebook
-# notebooks/ klasöründeki notebook'ları sırasıyla çalıştırın
 ```
+
+| Notebook | İçerik | Çalıştırılmalı mı? |
+|----------|--------|---------------------|
+| `01_EDA.ipynb` | Keşifsel veri analizi | ✅ İsteğe bağlı (sadece görselleri görmek için) |
+| `02_preprocessing.ipynb` | Veri ön-işleme | ✅ Evet (processed verileri ve pipeline nesnelerini üretir) |
+| `03_modeling_*.ipynb` | Model eğitimi | ⚠️ Eğitim uzun sürer — eğitilmiş model Drive'dan indirilebilir |
 
 ### API Sunucusu
 ```bash
@@ -115,13 +116,29 @@ docker-compose up --build
 
 ---
 
-## 👥 Ekip
+## 📦 Model Kaydetme Kuralları
 
-| Rol | Görev |
-|-----|-------|
-| Veri Mühendisi & DevOps | Repo yapısı, EDA, veri temizleme, Docker |
-| ML Mühendisi 1 | Anomali tespiti (Isolation Forest), Risk skorlama (XGBoost) |
-| ML Mühendisi 2 | Faiz optimizasyonu, SHAP entegrasyonu, Streamlit arayüzü |
+Eğitilen tüm modeller aşağıdaki formatta kaydedilmelidir:
+
+```python
+import joblib
+
+# Kaydetme
+joblib.dump(model, "models/model_adi.joblib")
+
+# Yükleme
+model = joblib.load("models/model_adi.joblib")
+```
+
+**İsimlendirme kuralı:** `models/` klasörüne `model_adi.joblib` formatında kaydedin:
+
+| Model | Dosya Adı |
+|-------|-----------|
+| XGBoost | `models/xgboost_model.joblib` |
+| Isolation Forest | `models/isolation_forest.joblib` |
+| Diğer modeller | `models/model_adi.joblib` |
+
+> **Not:** `.joblib` dosyaları `.gitignore` ile GitHub'a gitmez. Eğittiğiniz modeli `models/` klasörüne kaydettikten sonra Google Drive'a da yükleyin.
 
 ---
 
@@ -131,9 +148,3 @@ docker-compose up --build
 - **Boyut:** 255.347 satır × 18 sütun
 - **Hedef değişken:** `Default` (0 = Ödedi, 1 = Temerrüt)
 - **Sınıf dağılımı:** %88.4 / %11.6 (dengesiz)
-
----
-
-## 📄 Lisans
-
-Bu proje üniversite ders projesi kapsamında geliştirilmektedir.
