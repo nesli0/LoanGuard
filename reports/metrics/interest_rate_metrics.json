@@ -1,0 +1,20 @@
+{
+    "generated_at": "2026-04-19T17:13:51.980122",
+    "test_samples": 51070,
+    "approval_rate": 0.834972,
+    "rejection_rate": 0.165028,
+    "interest_rate_stats": {
+        "mean": 11.3764,
+        "std": 3.032,
+        "min": 5.3974,
+        "max": 19.4126
+    },
+    "approved": {
+        "count": 42642,
+        "mean_rate": 10.4243
+    },
+    "rejected": {
+        "count": 8428,
+        "mean_rate": 16.1936
+    }
+}
