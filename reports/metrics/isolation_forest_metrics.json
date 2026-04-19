@@ -1,0 +1,15 @@
+{
+    "test_samples": 51070,
+    "test_anomaly_count": 2521,
+    "test_anomaly_rate": 0.049363618562757,
+    "default_rate_clean_group": 0.11510020803724072,
+    "default_rate_anomaly_group": 0.13605712019040064,
+    "anomaly_precision_as_default_detector": 0.13605712019040064,
+    "anomaly_recall_as_default_detector": 0.05783173157983477,
+    "confusion": {
+        "tp": 343,
+        "fp": 2178,
+        "tn": 42961,
+        "fn": 5588
+    }
+}

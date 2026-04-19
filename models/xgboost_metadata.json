@@ -1,0 +1,38 @@
+{
+    "model_version": "1.0.0",
+    "trained_at": "2026-04-19T15:38:33.881839",
+    "best_iteration": 399,
+    "optimal_threshold": 0.6491304347826087,
+    "scale_pos_weight": 7.6,
+    "feature_names": [
+        "Age",
+        "Income",
+        "LoanAmount",
+        "CreditScore",
+        "MonthsEmployed",
+        "NumCreditLines",
+        "InterestRate",
+        "LoanTerm",
+        "DTIRatio",
+        "Education",
+        "EmploymentType",
+        "MaritalStatus",
+        "HasMortgage",
+        "HasDependents",
+        "LoanPurpose",
+        "HasCoSigner"
+    ],
+    "n_features": 16,
+    "train_samples": 173635,
+    "best_params": {
+        "colsample_bytree": 0.9406459823330613,
+        "gamma": 0.20551850665911564,
+        "learning_rate": 0.03561862459309322,
+        "max_depth": 3,
+        "min_child_weight": 1,
+        "n_estimators": 400,
+        "reg_alpha": 0.6807054515547668,
+        "reg_lambda": 1.5618691666342728,
+        "subsample": 0.7843349493719275
+    }
+}

@@ -1,0 +1,36 @@
+{
+    "generated_at": "2026-04-19T15:38:41.151161",
+    "baseline": {
+        "roc_auc": 0.754636,
+        "pr_auc": 0.326759,
+        "f1": 0.343374,
+        "precision": 0.230636,
+        "recall": 0.671725,
+        "mcc": 0.255505,
+        "threshold": 0.5
+    },
+    "final_05": {
+        "roc_auc": 0.758836,
+        "pr_auc": 0.332603,
+        "f1": 0.340973,
+        "precision": 0.226189,
+        "recall": 0.692295,
+        "mcc": 0.255091,
+        "threshold": 0.5
+    },
+    "final_opt": {
+        "roc_auc": 0.758836,
+        "pr_auc": 0.332603,
+        "f1": 0.374312,
+        "precision": 0.318894,
+        "recall": 0.453043,
+        "mcc": 0.281312,
+        "threshold": 0.64913
+    },
+    "search": {
+        "best_cv_auc": 0.75261,
+        "n_iter": 20,
+        "cv_folds": 3,
+        "optimal_threshold": 0.64913
+    }
+}
