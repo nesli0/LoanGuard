@@ -1,8 +1,10 @@
 {
     "model_version": "1.0.0",
-    "trained_at": "2026-04-19T15:38:33.881839",
+    "trained_at": "2026-04-23T22:39:16.425615",
     "best_iteration": 399,
-    "optimal_threshold": 0.6491304347826087,
+    "optimal_threshold": 0.4950836120401338,
+    "threshold_criterion": "max_precision_at_recall_gte_0.7",
+    "min_recall_target": 0.7,
     "scale_pos_weight": 7.6,
     "feature_names": [
         "Age",

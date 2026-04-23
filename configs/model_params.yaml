@@ -41,6 +41,10 @@ interest_optimization:
 preprocessing:
   numeric_scaler: "StandardScaler"
   categorical_encoder: "LabelEncoder"
-  handle_outliers: true
+  handle_outliers: false
   outlier_method: "IQR"  # IQR | zscore
   outlier_threshold: 1.5
+
+# Eşik Optimizasyonu
+threshold_optimization:
+  min_recall: 0.70  # Class 1 (Batık) için hedef minimum Recall
