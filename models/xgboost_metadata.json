@@ -1,8 +1,8 @@
 {
     "model_version": "1.0.0",
-    "trained_at": "2026-04-23T22:39:16.425615",
-    "best_iteration": 399,
-    "optimal_threshold": 0.4950836120401338,
+    "trained_at": "2026-04-25T11:04:17.945287",
+    "best_iteration": 397,
+    "optimal_threshold": 0.4885284280936455,
     "threshold_criterion": "max_precision_at_recall_gte_0.7",
     "min_recall_target": 0.7,
     "scale_pos_weight": 7.6,
@@ -22,9 +22,13 @@
         "HasMortgage",
         "HasDependents",
         "LoanPurpose",
-        "HasCoSigner"
+        "HasCoSigner",
+        "LoanToIncome",
+        "PaymentToIncome",
+        "CreditAgePerLine",
+        "TotalDebtBurden"
     ],
-    "n_features": 16,
+    "n_features": 20,
     "train_samples": 173635,
     "best_params": {
         "colsample_bytree": 0.9406459823330613,
