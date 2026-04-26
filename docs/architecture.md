@@ -68,7 +68,7 @@ bir alt modülüdür.
 ```
 Ham veri (17 sütun)
   → LabelEncoder (7 kategorik sütun)        # label_encoders.joblib
-  → 4 Finansal Rasyo (annuity formülü)      # hesaplama, dosya yok
+  → 4 Finansal Rasyo (annuity formülü)      # src/features/ratios.py (Single Source of Truth)
   → StandardScaler (13 sayısal sütun)       # scaler.joblib
   → 20 özellik (model girişi)
 ```
@@ -97,7 +97,7 @@ Ham veri (17 sütun)
 
 ### SHAP (Per-Request)
 
-- **Araç:** `shap.TreeExplainer` (`src/explainability/shap_explainer.py`)
+- **Araç:** `shap.TreeExplainer` (Lazy init ile `src/models/predictor.py` içine entegre)
 - **Çıktı:** Top-3 özellik, yön (+/-) ve SHAP değeri
 - **Amaç:** "Bu başvuru neden reddedildi?" → LLM prompt'a beslenir
 
@@ -142,11 +142,12 @@ Alternatif senaryolar: {counterfactuals}
 
 ## Teslim Edilecekler (ML → Backend)
 
-1. `models/*.joblib` — tüm model dosyaları
-2. `src/models/predictor.py` — `predict(dict) → dict` API
-3. `src/explainability/` — SHAP ve DiCE modülleri
-4. Input/Output JSON şeması (aşağıda)
-5. LLM prompt template
+1. `models/` — `.joblib` ve `xgboost_metadata.json` dosyaları
+2. `src/models/predictor.py` — `predict(dict) → dict` API (SHAP dahildir)
+3. `src/explainability/dice_explainer.py` — DiCE counterfactual modülü
+4. `src/features/ratios.py` — Finansal oranların tekil hesaplama merkezi
+5. Input/Output JSON şeması (aşağıda)
+6. LLM prompt template
 
 ### API Input Şeması
 

@@ -1,7 +1,6 @@
 {
     "model_version": "1.0.0",
-    "trained_at": "2026-04-25T11:04:17.945287",
-    "smote_applied": true,
+    "trained_at": "2026-04-26T20:11:32.424407",
     "best_iteration": 397,
     "optimal_threshold": 0.4885284280936455,
     "threshold_criterion": "max_precision_at_recall_gte_0.7",

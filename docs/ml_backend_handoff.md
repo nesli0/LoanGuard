@@ -30,7 +30,9 @@ src/
 
 ---
 
-## 2. Kurulum
+## 2. Kurulum ve Dosya İndirme
+
+> **⚠️ Önemli Not (Google Drive):** GitHub dosya boyutu sınırları (ve best-practice) nedeniyle `.joblib` model dosyaları ve `loans_cleaned.csv` verisi repoda (GitHub'da) bulunmamaktadır. Entegrasyona başlamadan önce, benim sana ilettiğim **Google Drive** bağlantısından güncel model dosyalarını indirip projedeki ilgili dizinlere (sırasıyla `models/` ve `data/interim/` klasörlerine) yerleştirmeyi unutma!
 
 ```bash
 pip install -r requirements.txt   # dice-ml, shap, xgboost, joblib dahil
