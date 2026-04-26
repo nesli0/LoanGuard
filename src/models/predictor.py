@@ -1,5 +1,7 @@
 """Unified LoanGuard inference pipeline (Stage 1 → 2 → 3 + SHAP)."""
 import json
+import logging
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Optional
@@ -8,9 +10,12 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from src.features.ratios import add_ratios
 from src.pipeline.interest_rate import compute_interest_rate
 
-MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "models"
+logger = logging.getLogger(__name__)
+
+MODEL_DIR = Path(os.getenv("LOANGUARD_MODEL_PATH", Path(__file__).resolve().parent.parent.parent / "models"))
 
 CATEGORICAL_COLS = [
     "Education", "EmploymentType", "MaritalStatus",
@@ -62,6 +67,7 @@ class LoanGuardPredictor:
         self.model_dir = Path(model_dir)
         self._load_artifacts()
         self._explainer = None  # shap.TreeExplainer — lazy, expensive to init
+        logger.info("LoanGuardPredictor initialized (threshold=%.4f)", self.threshold)
 
     def _load_artifacts(self) -> None:
         self.label_encoders = joblib.load(self.model_dir / "label_encoders.joblib")
@@ -81,27 +87,21 @@ class LoanGuardPredictor:
     def _encode(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
         for col in CATEGORICAL_COLS:
-            df[col] = self.label_encoders[col].transform(df[col])
+            try:
+                df[col] = self.label_encoders[col].transform(df[col])
+            except ValueError as exc:
+                # LabelEncoder raises ValueError for values not seen during training
+                bad_value = df[col].iloc[0] if not df.empty else "<unknown>"
+                raise ValueError(
+                    f"Gecersiz deger '{bad_value}' icin '{col}' alani. "
+                    f"Beklenen degerler: {list(self.label_encoders[col].classes_)}"
+                ) from exc
         return df
 
     @staticmethod
     def _add_ratios(df: pd.DataFrame) -> pd.DataFrame:
-        """Annuity-based financial ratios (same formula as 02b notebook)."""
-        df = df.copy()
-        r = df["InterestRate"] / 1200
-        n = df["LoanTerm"]
-        P = df["LoanAmount"]
-        monthly_income = df["Income"] / 12
-        monthly_pmt = np.where(
-            r < 1e-10,
-            P / np.maximum(n, 1),
-            P * r / (1 - (1 + r) ** (-n)),
-        )
-        df["LoanToIncome"] = P / np.maximum(df["Income"], 1)
-        df["PaymentToIncome"] = monthly_pmt / np.maximum(monthly_income, 1)
-        df["CreditAgePerLine"] = df["MonthsEmployed"] / (df["NumCreditLines"] + 1)
-        df["TotalDebtBurden"] = (monthly_pmt * n) / np.maximum(df["Income"], 1)
-        return df
+        """Delegate to src.features.ratios — single source of truth."""
+        return add_ratios(df)
 
     def _scale(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -148,7 +148,12 @@ class LoanGuardPredictor:
         Returns:
             Dict with keys: anomaly_flag, risk_score, decision,
             interest_rate, shap_top3, counterfactuals.
+
+        Raises:
+            ValueError: If a categorical field contains a value not seen
+                        during training (propagated from _encode).
         """
+        logger.info("predict() called")
         df_ready = self._preprocess(user_data)
 
         # Stage 1 — anomaly detection
@@ -157,6 +162,7 @@ class LoanGuardPredictor:
         # Stage 2 — risk scoring
         risk_score = float(self.xgb_model.predict_proba(df_ready)[0, 1])
         decision = "approved" if risk_score < self.threshold else "rejected"
+        logger.info("risk_score=%.4f  decision=%s  anomaly=%s", risk_score, decision, anomaly_flag)
 
         # Stage 3 — interest rate (approved only)
         interest_rate = (

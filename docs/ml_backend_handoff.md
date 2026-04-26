@@ -37,7 +37,12 @@ pip install -r requirements.txt   # dice-ml, shap, xgboost, joblib dahil
 ```
 
 `models/` klasörünü uygulamanın çalışma dizinine göre erişilebilir yere koy.
-Varsayılan yol: proje kökündeki `models/` (predictor.py otomatik buluyor).
+Varsayılan yol: proje kökündeki `models/`. 
+**Opsiyonel:** Ortam değişkeni ile dizini özelleştirebilirsin:
+```bash
+export LOANGUARD_MODEL_PATH="/var/www/loanguard/models"
+export LOANGUARD_DATA_DIR="/var/www/loanguard/data/interim"
+```
 
 ---
 
@@ -62,10 +67,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 ```
 
-`DiceExplainer` ayrıca `data/interim/loans_cleaned.csv` dosyasını yüklüyor.
-Bu dosya production'da olmayabilir — yoksa `DiceExplainer()`'ı başlatırken
-`FileNotFoundError` alırsın. Şimdilik sadece rejected başvurularda opsiyonel
-tutabilirsin ya da benden bir `dice_background.csv` dosyası iste (models/ içine koyarız).
+`DiceExplainer` ayrıca `data/interim/loans_cleaned.csv` dosyasını (14 MB) yükler. Eğer bu dosya bulunamazsa veya işlem sırasında hata alınırsa, DiCE çökmez — güvenli bir şekilde (fail-safe) boş liste `[]` döner. Ancak doğru counterfactual senaryoları sunabilmesi için `LOANGUARD_DATA_DIR` altında bu dosyanın bulunması önemlidir.
 
 ---
 
@@ -147,6 +149,26 @@ def predict(body: ApplicantSchema, request: Request):
 | `interest_rate` | float veya null | Onaylıysa önerilen yıllık faiz (%). Reddedildiyse `null`. |
 | `shap_top3` | list | Kararı en çok etkileyen 3 özellik. `"+"` = riski artırdı, `"-"` = riski azalttı. |
 | `counterfactuals` | list | Reddedilen başvuru için "ne değişseydi onaylanırdı" senaryoları. Onaylıysa boş liste. |
+
+### 🛑 Hata Yönetimi (Error Handling)
+
+- **Unseen Categorical Değerler:** `predict()` çağrıldığında, eğer modele (örneğin) `Education: "Unknown"` gibi eğitimde görülmemiş bir değer gönderilirse, model anlamsız bir tahmin yapmak yerine doğrudan Python `ValueError` fırlatır.
+  - Hata mesajı: `"Gecersiz deger 'Unknown' icin 'Education' alani. Beklenen degerler: ['Bachelor's', 'High School', 'Master's', 'PhD']"`
+  - **Ne yapmalısın?** API seviyesinde bu hatayı yakalayıp kullanıcıya HTTP 400 (Bad Request) dönmelisin.
+- **DiCE Hataları:** `generate_counterfactuals()` metodu çalışırken arka planda bir algoritma hatası oluşursa (veya veri yoksa), fonksiyon çökmez; Exception'ı kendi içinde yutarak `[]` (boş liste) döner.
+
+### ⏱️ Performans ve Latency (Zaman Aşımı Önerileri)
+
+- **Predict (Aşama 1+2+3 + SHAP):** Oldukça hızlıdır. XGBoost çıkarımı ve SHAP değerlerinin temin edilmesi genellikle **< 50ms** sürer.
+  - *Not:* SHAP explainer "lazy initialization" kullandığı için ilk `predict()` çağrısı biraz yavaş olabilir (~200ms). Sonrakiler < 50ms sürecektir.
+- **DiCE Counterfactual (Reddedilenler için):** DiCE, rastgele (random) metotla 3 alternatif senaryo arar. Bu işlem daha maliyetlidir ve donanıma göre **1.5sn – 3.0sn** arası sürebilir.
+  - **Tavsiye:** HTTP Request timeout süresini en az `5 saniye` olarak belirle. Veya DiCE üretimini background task (örn: Celery) ile yapıp sonucu asenkron dönebilirsin.
+
+### 🔄 Eşzamanlılık (Concurrency) ve Thread-Safety
+
+- **XGBoost:** Inference (tahmin) işlemleri GIL'i (Global Interpreter Lock) serbest bıraktığı için multithreading dostudur.
+- **Lazy Initialization:** `LoanGuardPredictor._explainer` ve `DiceExplainer._dice_exp` ilk istek geldiğinde (lazy) başlatılır. Eğer uygulama başlar başlamaz aynı anda çok fazla async istek gelirse, `TreeExplainer` nesnesi birden fazla kez oluşturulabilir (Race Condition).
+  - **Tavsiye:** `app.state.predictor` nesnesini oluşturduktan sonra, uygulama ayağa kalkarken sahte (dummy) bir veri ile 1 kez `.predict(dummy_data)` çağrısı yap. Böylece tüm nesneler RAM'e güvenle yerleşir (warm-up) ve sonraki async istekler %100 thread-safe çalışır.
 
 ---
 

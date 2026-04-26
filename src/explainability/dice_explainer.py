@@ -9,6 +9,7 @@ Actionable features (realistic changes an applicant can make):
   - Income       : demonstrate higher/stable income
 """
 import json
+import os
 import warnings
 from pathlib import Path
 from typing import Optional
@@ -17,10 +18,10 @@ import joblib
 import numpy as np
 import pandas as pd
 
-warnings.filterwarnings("ignore")
+from src.features.ratios import add_ratios
 
-MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "models"
-DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "interim"
+MODEL_DIR = Path(os.getenv("LOANGUARD_MODEL_PATH", Path(__file__).resolve().parent.parent.parent / "models"))
+DATA_DIR = Path(os.getenv("LOANGUARD_DATA_DIR", Path(__file__).resolve().parent.parent.parent / "data" / "interim"))
 
 CATEGORICAL_COLS = [
     "Education", "EmploymentType", "MaritalStatus",
@@ -40,24 +41,6 @@ NUMERICAL_COLS_ALL = NUMERICAL_COLS_ORIGINAL + [
 ACTIONABLE_FEATURES = ["LoanAmount", "HasCoSigner", "Income"]
 
 
-def _add_ratios(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute 4 financial ratios (same formula as 02b_feature_engineering)."""
-    df = df.copy()
-    r = df["InterestRate"] / 1200
-    n = df["LoanTerm"]
-    P = df["LoanAmount"]
-    monthly_income = df["Income"] / 12
-    monthly_pmt = np.where(
-        r < 1e-10,
-        P / np.maximum(n, 1),
-        P * r / (1 - (1 + r) ** (-n)),
-    )
-    df["LoanToIncome"] = P / np.maximum(df["Income"], 1)
-    df["PaymentToIncome"] = monthly_pmt / np.maximum(monthly_income, 1)
-    df["CreditAgePerLine"] = df["MonthsEmployed"] / (df["NumCreditLines"] + 1)
-    df["TotalDebtBurden"] = (monthly_pmt * n) / np.maximum(df["Income"], 1)
-    return df
-
 
 class _PipelineWrapper:
     """sklearn-compatible wrapper: pre-encoded data → ratios → scale → predict.
@@ -66,21 +49,23 @@ class _PipelineWrapper:
     (same space as loans_cleaned.csv) and calls this wrapper to evaluate them.
     """
 
-    def __init__(self, scaler, xgb_model, feature_names: list):
+    def __init__(self, scaler, xgb_model, feature_names: list, threshold: float):
         self._scaler = scaler
         self._xgb = xgb_model
         self._feature_names = feature_names
+        self._threshold = threshold   # must match xgboost_metadata.json
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+        # Use the real optimal threshold, not the arbitrary 0.5 default
+        return (self.predict_proba(X)[:, 1] >= self._threshold).astype(int)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         X = X.copy()
-        # DiCE categorical columns'ı object/category dtype yapıyor;
-        # XGBoost 2.x bunu reddeder — hepsini float'a çevir.
+        # DiCE categorical columns'i object/category dtype yapiyor;
+        # XGBoost 2.x bunu reddeder — hepsini float'a cevir.
         for col in X.columns:
             X[col] = pd.to_numeric(X[col], errors="coerce")
-        X = _add_ratios(X)
+        X = add_ratios(X)   # shared implementation from src.features.ratios
         X[NUMERICAL_COLS_ALL] = self._scaler.transform(X[NUMERICAL_COLS_ALL])
         return self._xgb.predict_proba(X[self._feature_names])
 
@@ -149,7 +134,12 @@ class DiceExplainer:
         import dice_ml
 
         bg = self._load_background()
-        wrapper = _PipelineWrapper(self._scaler, self._xgb, self._feature_names)
+        wrapper = _PipelineWrapper(
+            self._scaler,
+            self._xgb,
+            self._feature_names,
+            threshold=self._threshold,  # correct threshold from metadata
+        )
 
         all_feature_cols = [c for c in bg.columns if c != "Default"]
         d = dice_ml.Data(
@@ -186,13 +176,15 @@ class DiceExplainer:
         query_df = pd.DataFrame([encoded]).drop(columns=["Default"], errors="ignore")
 
         try:
-            cf_result = self._dice_exp.generate_counterfactuals(
-                query_df,
-                total_CFs=n_cf,
-                desired_class=0,       # Default=0 means approved
-                features_to_vary=features_to_vary,
-                random_seed=self.random_state,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                cf_result = self._dice_exp.generate_counterfactuals(
+                    query_df,
+                    total_CFs=n_cf,
+                    desired_class=0,       # Default=0 means approved
+                    features_to_vary=features_to_vary,
+                    random_seed=self.random_state,
+                )
             cf_df = cf_result.cf_examples_list[0].final_cfs_df
             if cf_df is None or cf_df.empty:
                 return []
