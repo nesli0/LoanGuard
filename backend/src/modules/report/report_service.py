@@ -19,9 +19,7 @@ async def generate_report(db: AsyncSession, user_id: uuid.UUID, request: ReportG
     existing = await get_report(db, user_id, request.month, request.year)
     
     # Run the budget analysis for this month (we will reuse the budget_service functionality)
-    # The budget_service.get_budget_analysis usually works on the user's overall data or a specific period.
-    # Assuming get_budget_analysis returns health score and summaries.
-    analysis = await budget_service.get_budget_analysis(db, user_id)
+    analysis = await budget_service.calculate_health_score(db, user_id)
     
     health_score = analysis.get("score", 0.0)
     summary_data = {

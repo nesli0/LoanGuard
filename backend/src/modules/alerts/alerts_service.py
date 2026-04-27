@@ -42,3 +42,62 @@ async def dismiss_alert(db: AsyncSession, alert: Alert) -> Alert:
     await db.commit()
     await db.refresh(alert)
     return alert
+
+
+async def evaluate_rules(db: AsyncSession, user_id: uuid.UUID, analysis: dict):
+    """
+    Analiz sonuçlarına göre kuralları değerlendirir ve gerekirse alarm oluşturur.
+    """
+    rules = [
+        {
+            "id": "low_savings",
+            "condition": analysis.get("savings_rate", 0) < 10,
+            "level": "red",
+            "title": "Düşük Tasarruf Oranı",
+            "message": f"Tasarruf oranınız %{analysis.get('savings_rate', 0)} seviyesinde. Hedef en az %10 olmalıdır."
+        },
+        {
+            "id": "no_emergency_fund",
+            "condition": analysis.get("emergency_fund_ratio", 0) < 1,
+            "level": "red",
+            "title": "Acil Durum Fonu Yetersiz",
+            "message": "Birikimleriniz henüz 1 aylık giderinizi karşılamıyor. En az 3 aylık hedef koymalısınız."
+        },
+        {
+            "id": "high_dti",
+            "condition": analysis.get("dti_ratio", 0) > 40,
+            "level": "red",
+            "title": "Yüksek Borçluluk (DTI) Oranı",
+            "message": f"Borç/Gelir oranınız %{analysis.get('dti_ratio', 0)}. %40 eşiğini aşmış durumdasınız."
+        },
+        {
+            "id": "high_fixed_expenses",
+            "condition": analysis.get("fixed_expense_ratio", 0) > 60,
+            "level": "yellow",
+            "title": "Yüksek Sabit Gider",
+            "message": f"Giderlerinizin %{analysis.get('fixed_expense_ratio', 0)} kadarı sabit. Esnekliğiniz düşük."
+        }
+    ]
+
+    for rule in rules:
+        if rule["condition"]:
+            # Aynı rule_id ile aktif (dismissed=False) bir alarm var mı kontrol et
+            check_query = select(Alert).where(
+                Alert.user_id == user_id,
+                Alert.rule_id == rule["id"],
+                Alert.is_dismissed == False
+            )
+            result = await db.execute(check_query)
+            existing = result.scalar_one_or_none()
+
+            if not existing:
+                new_alert = Alert(
+                    user_id=user_id,
+                    rule_id=rule["id"],
+                    level=rule["level"],
+                    title=rule["title"],
+                    message=rule["message"]
+                )
+                db.add(new_alert)
+    
+    await db.commit()

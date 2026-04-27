@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import CheckConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -12,7 +12,10 @@ class FinancialPeriod(SQLModel, table=True):
     user_id: uuid.UUID = Field(foreign_key="users.id", index=True)
     month: int = Field(ge=1, le=12)
     year: int = Field(ge=2000, le=2100)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
 
 
 class FinancialEntry(SQLModel, table=True):
@@ -35,4 +38,7 @@ class FinancialEntry(SQLModel, table=True):
 
     note: str | None = None             # Kullanıcı notu
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

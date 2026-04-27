@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -18,5 +19,11 @@ class Alert(SQLModel, table=True):
     is_read: bool = Field(default=False)
     is_dismissed: bool = Field(default=False)
 
-    triggered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    triggered_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

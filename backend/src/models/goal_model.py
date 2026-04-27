@@ -1,6 +1,7 @@
 import uuid
 from datetime import UTC, date, datetime
 
+from sqlalchemy import Column, DateTime
 from sqlmodel import Field, SQLModel
 
 
@@ -21,4 +22,7 @@ class Goal(SQLModel, table=True):
     deadline: date | None = None
     is_completed: bool = Field(default=False)
 
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

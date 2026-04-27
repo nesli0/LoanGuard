@@ -49,6 +49,18 @@ FEATURE_ORDER = [
     "HasMortgage", "HasDependents", "LoanPurpose", "HasCoSigner",
 ]
 
+# Scaler yalnızca bu 9 numerik feature ile eğitildi
+NUMERIC_FEATURES = [
+    "Age", "Income", "LoanAmount", "CreditScore", "MonthsEmployed",
+    "NumCreditLines", "InterestRate", "LoanTerm", "DTIRatio",
+]
+
+# Kategorik feature'lar encode edilmiş haliyle direkt girilir (scale edilmez)
+CATEGORICAL_FEATURES = [
+    "Education", "EmploymentType", "MaritalStatus",
+    "HasMortgage", "HasDependents", "LoanPurpose", "HasCoSigner",
+]
+
 OPTIMAL_THRESHOLD = 0.6491304347826087
 
 
@@ -160,11 +172,18 @@ async def analyze_credit(
             "HasCoSigner":     _encode_categorical(has_cosigner_str, "HasCoSigner"),
         }
 
-        df = pd.DataFrame([raw])[FEATURE_ORDER]
+        # ── 3. Scale (sadece numerik feature'lar) ─────────────────────
+        # Scaler yalnızca 9 numerik feature ile eğitildi;
+        # kategorikler encode edilmiş int olarak direkt eklenir.
+        df_numeric = pd.DataFrame([{f: raw[f] for f in NUMERIC_FEATURES}])
+        scaled_values = ml_models.scaler.transform(df_numeric)
+        df_scaled_numeric = pd.DataFrame(scaled_values, columns=NUMERIC_FEATURES)
 
-        # ── 3. Scale ─────────────────────────────────────────────────
-        df_scaled = ml_models.scaler.transform(df)
-        df_scaled = pd.DataFrame(df_scaled, columns=FEATURE_ORDER)
+        # Kategorikleri ekle
+        df_categorical = pd.DataFrame([{f: raw[f] for f in CATEGORICAL_FEATURES}])
+
+        # FEATURE_ORDER sırasına göre birleştir
+        df_scaled = pd.concat([df_scaled_numeric, df_categorical], axis=1)[FEATURE_ORDER]
 
         # ── 4. XGBoost Tahmin ────────────────────────────────────────
         prob = float(ml_models.xgboost.predict_proba(df_scaled)[0][1])
@@ -249,17 +268,39 @@ def _generate_counterfactuals(
         if feat not in raw:
             continue
 
-        trial = df_scaled.copy()
-        new_val = raw[feat] + (raw[feat] * delta if isinstance(delta, float) and abs(delta) < 1 else delta)
+        # 1. Yeni ham değeri hesapla
+        current_val = raw[feat]
+        if isinstance(delta, float) and abs(delta) < 1:
+            # Yüzdesel değişim (örn: Income +%15)
+            new_val = current_val * (1 + delta)
+        else:
+            # Sabit değişim (örn: CreditScore +50)
+            new_val = current_val + delta
+
+        # Cap (Sınır) kontrolü
         if cap is not None:
             new_val = min(new_val, cap) if delta > 0 else max(new_val, cap)
 
-        # Scaler ile normalize edilmiş değeri güncelle
-        feat_idx = FEATURE_ORDER.index(feat)
-        trial.iloc[0, feat_idx] = new_val  # Basit tahmini güncelleme
-
+        # 2. Bu değişikliği içeren bir raw bütçe oluşturup scale etmemiz lazım
+        # Sadece bu feature'ı değiştirip diğerlerini aynı bırakarak yeni bir scaled row üretelim
+        trial_raw = raw.copy()
+        trial_raw[feat] = new_val
+        
         try:
-            new_prob = float(ml_models.xgboost.predict_proba(trial)[0][1])
+            # Numerik kısmını ayır ve scale et
+            df_trial_num = pd.DataFrame([{f: trial_raw[f] for f in NUMERIC_FEATURES}])
+            scaled_vals = ml_models.scaler.transform(df_trial_num)
+            df_trial_scaled_num = pd.DataFrame(scaled_vals, columns=NUMERIC_FEATURES)
+            
+            # Kategorik kısmı (değişmedi ama yapı için lazım)
+            df_trial_cat = pd.DataFrame([{f: trial_raw[f] for f in CATEGORICAL_FEATURES}])
+            
+            # Birleştir
+            df_trial_final = pd.concat([df_trial_scaled_num, df_trial_cat], axis=1)[FEATURE_ORDER]
+
+            # 3. Model tahmini
+            new_prob = float(ml_models.xgboost.predict_proba(df_trial_final)[0][1])
+            
             if new_prob > current_prob:
                 results.append(Counterfactual(
                     changes={feat: round(new_val, 2)},
@@ -268,6 +309,7 @@ def _generate_counterfactuals(
                 ))
         except Exception:
             continue
+
 
         if len(results) >= n:
             break

@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import Column
+from sqlalchemy import Column, DateTime
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -23,4 +23,7 @@ class CreditAnalysis(SQLModel, table=True):
         sa_column=Column(JSONB, nullable=True),
     )
 
-    analyzed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    analyzed_at: datetime = Field(
+        default_factory=lambda: datetime.now(UTC),
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )

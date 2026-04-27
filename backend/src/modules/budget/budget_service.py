@@ -7,6 +7,7 @@ from src.core.exceptions import AppException
 from src.models.financial_model import FinancialEntry, FinancialPeriod
 from src.models.goal_model import Goal
 from src.modules.budget.budget_schemas import BudgetPeriodRequest
+from src.modules.alerts import alerts_service
 
 
 async def get_period(db: AsyncSession, user_id: uuid.UUID, month: int, year: int) -> FinancialPeriod | None:
@@ -106,7 +107,7 @@ async def calculate_health_score(db: AsyncSession, user_id: uuid.UUID) -> dict:
         1.0 * 10                                        # %10 ağırlık (şimdilik sapma hesabını sabitliyoruz)
     ) * 100
 
-    return {
+    result = {
         "score": round(max(0, min(100, score)), 1),
         "savings_rate": round(tasarruf_orani, 2),
         "dti_ratio": round(dti, 2),
@@ -120,3 +121,7 @@ async def calculate_health_score(db: AsyncSession, user_id: uuid.UUID) -> dict:
             "total_savings": total_savings
         }
     }
+    
+    await alerts_service.evaluate_rules(db, user_id, result)
+    
+    return result
