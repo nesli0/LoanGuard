@@ -1,8 +1,9 @@
 from src.modules.simulator.simulator_schemas import LoanSimulationRequest, SimulationResult
 
 def calculate_loan_simulation(request: LoanSimulationRequest) -> SimulationResult:
-    # Monthly interest rate
-    r = request.interest_rate / 100 / 12
+    # interest_rate 0-1 aralığında gelir (örn: 0.032 = %3.2 yıllık)
+    # Aylık faize çevirmek için yalnızca 12'ye böl
+    r = request.interest_rate / 12
     n = request.months
     P = request.amount
 

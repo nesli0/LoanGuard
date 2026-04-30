@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import AppException
 from src.models.financial_model import FinancialEntry, FinancialPeriod
-from src.models.goal_model import Goal
 from src.modules.budget.budget_schemas import BudgetPeriodRequest
 from src.modules.alerts import alerts_service
 
@@ -80,32 +79,65 @@ async def calculate_health_score(db: AsyncSession, user_id: uuid.UUID) -> dict:
     fixed_expense = sum(e.amount for e in entries if e.type == "expense" and e.is_fixed)
     loan_payments = sum(e.amount for e in entries if e.type == "expense" and e.is_loan_payment)
 
-    # Acil fonu bulmak için goals tablosuna bak ("acil_fon" kategorisi)
-    goals_result = await db.execute(
-        select(Goal).where(Goal.user_id == user_id, Goal.category == "acil_fon")
-    )
-    emergency_goals = list(goals_result.scalars().all())
-    total_savings = sum(g.current_amount for g in emergency_goals)
+    # total_savings = gelir - gider (goals'tan değil)
+    total_savings = total_income - total_expense
 
     if total_income == 0:
         total_income = 1.0  # ZeroDivision error önlemek için
 
     tasarruf_orani = ((total_income - total_expense) / total_income) * 100
     dti = (loan_payments / total_income) * 100
-    
+
     aylik_gider = total_expense if total_expense > 0 else 1.0
-    acil_fon_orani = total_savings / aylik_gider
+    acil_fon_orani = total_savings / aylik_gider if total_savings > 0 else 0.0
 
     sabitlik_orani = (fixed_expense / aylik_gider) * 100
 
-    # Skor hesaplama formülü (Implementation planındaki ağırlıklar)
+    # ── Skor Bileşenleri (Ağırlıklı Ortalama) ──────────────────────────
+    # 1. Tasarruf oranı (%30 ağırlık): >%20 → tam puan, <%10 → 0
+    if tasarruf_orani >= 20:
+        savings_score = 1.0
+    elif tasarruf_orani <= 0:
+        savings_score = 0.0
+    elif tasarruf_orani >= 10:
+        savings_score = (tasarruf_orani - 10) / 10.0  # 10-20 arası lineer
+    else:
+        savings_score = tasarruf_orani / 10.0 * 0.5   # 0-10 arası düşük puan
+
+    # 2. DTI oranı (%25 ağırlık): <%35 → tam puan, >%40 → 0
+    if dti <= 35:
+        dti_score = 1.0
+    elif dti >= 40:
+        dti_score = 0.0
+    else:
+        dti_score = (40 - dti) / 5.0  # 35-40 arası lineer
+
+    # 3. Sabit gider oranı (%15 ağırlık): <%60 → tam puan, >%60 → düşük puan
+    if sabitlik_orani <= 60:
+        fixed_score = 1.0
+    elif sabitlik_orani >= 90:
+        fixed_score = 0.0
+    else:
+        fixed_score = (90 - sabitlik_orani) / 30.0  # 60-90 arası lineer
+
+    # 4. Acil fon oranı (%20 ağırlık): >3 ay → tam puan, 0 → 0 puan
+    if acil_fon_orani >= 3:
+        emergency_score = 1.0
+    elif acil_fon_orani <= 0:
+        emergency_score = 0.0
+    else:
+        emergency_score = acil_fon_orani / 3.0  # 0-3 arası lineer
+
+    # 5. Sabit bonus bileşen (%10 ağırlık): veri var mı?
+    data_completeness_score = 1.0 if (total_income > 1.0 and len(entries) > 0) else 0.5
+
     score = (
-        min(tasarruf_orani / 20.0, 1.0) * 30 +          # %30 ağırlık (> %20 ideal)
-        max(1.0 - (dti / 35.0), 0.0) * 25 +             # %25 ağırlık (< %35 ideal)
-        min(acil_fon_orani / 3.0, 1.0) * 20 +           # %20 ağırlık (> 3 ay ideal)
-        max(1.0 - (sabitlik_orani / 60.0), 0.0) * 15 +  # %15 ağırlık (< %60 ideal)
-        1.0 * 10                                        # %10 ağırlık (şimdilik sapma hesabını sabitliyoruz)
-    ) * 100
+        savings_score * 30 +
+        dti_score * 25 +
+        emergency_score * 20 +
+        fixed_score * 15 +
+        data_completeness_score * 10
+    )
 
     result = {
         "score": round(max(0, min(100, score)), 1),
@@ -118,10 +150,11 @@ async def calculate_health_score(db: AsyncSession, user_id: uuid.UUID) -> dict:
             "total_expense": total_expense,
             "fixed_expense": fixed_expense,
             "loan_payments": loan_payments,
-            "total_savings": total_savings
+            "total_savings": round(total_savings, 2),
         }
     }
-    
+
     await alerts_service.evaluate_rules(db, user_id, result)
-    
+
     return result
+

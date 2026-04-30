@@ -27,7 +27,7 @@ async def send_message(
     await chat_service.save_message(db, current_user.id, "user", request.message)
     
     # Generate and save AI response
-    ai_response_text = await chat_service.generate_mock_ai_response(request.message)
+    ai_response_text = await chat_service.generate_ai_response(db, current_user.id, request.message)
     ai_message = await chat_service.save_message(db, current_user.id, "assistant", ai_response_text)
     
     return ApiResponse(success=True, data=ai_message)

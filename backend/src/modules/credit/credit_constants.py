@@ -26,31 +26,48 @@ MARITAL_MAP = {
 }
 
 LOAN_PURPOSE_MAP = {
-    "ev":      "Home",
-    "araç":    "Auto",
-    "eğitim":  "Education",
-    "iş":      "Business",
-    "diğer":   "Other",
-    "other":   "Other",
-    "home":    "Home",
-    "auto":    "Auto",
+    "ev":        "Home",
+    "araç":      "Auto",
+    "eğitim":    "Education",
+    "iş":        "Business",
+    "diğer":     "Other",
+    "other":     "Other",
+    "home":      "Home",
+    "auto":      "Auto",
     "education": "Education",
-    "business": "Business",
+    "business":  "Business",
 }
 
-# ── Risk Band Etiketleri ──
-RISK_BANDS = [
-    ("Çok Düşük",  0.0,  0.2),
-    ("Düşük",      0.2,  0.4),
-    ("Orta",       0.4,  0.55),
-    ("Yüksek",     0.55, 0.7),
-    ("Çok Yüksek", 0.7,  1.0),
+# ── Onaylanma Şansı Bantları (approval_probability = 1 - risk_score) ──
+APPROVAL_BANDS = [
+    ("Çok Düşük Onaylanma Şansı",  0.0,  0.31),
+    ("Düşük Onaylanma Şansı",      0.31, 0.51),
+    ("Orta Onaylanma Şansı",       0.51, 0.71),
+    ("Yüksek Onaylanma Şansı",     0.71, 0.86),
+    ("Çok Yüksek Onaylanma Şansı", 0.86, 1.01),
 ]
 
-# ── Faiz Oranı Hesabı (interest_rate_metadata.json) ──
-BASE_RATE = 0.05
-RISK_PREMIUM_MAX = 0.15
-MAX_RATE = 0.20
+# ── Feature Adları Türkçe Mapping (SHAP açıklamaları için) ──
+FEATURE_NAMES_TR = {
+    "InterestRate":    "Faiz Oranı",
+    "LoanAmount":      "Kredi Tutarı",
+    "Age":             "Yaş",
+    "EmploymentType":  "İstihdam Tipi",
+    "LoanPurpose":     "Kredi Amacı",
+    "DTIRatio":        "Borç/Gelir Oranı",
+    "CreditScore":     "Kredi Skoru",
+    "MonthsEmployed":  "Çalışma Süresi (Ay)",
+    "NumCreditLines":  "Kredi Hattı Sayısı",
+    "HasMortgage":     "İpotek Durumu",
+    "HasDependents":   "Bakmakla Yükümlü",
+    "HasCoSigner":     "Kefil Durumu",
+    "LoanTerm":        "Kredi Vadesi (Ay)",
+    "Income":          "Aylık Gelir",
+    "LoanToIncome":    "Kredi/Gelir Oranı",
+    "PaymentToIncome": "Taksit/Gelir Oranı",
+    "CreditAgePerLine":"Kredi Yaşı/Hat",
+    "TotalDebtBurden": "Toplam Borç Yükü",
+}
 
 # ── Error Codes ──
 CREDIT_PROFILE_INCOMPLETE = "CREDIT_PROFILE_INCOMPLETE"

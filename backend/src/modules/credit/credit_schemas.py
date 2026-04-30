@@ -14,7 +14,8 @@ class CreditAnalyzeRequest(BaseModel):
     loan_amount: float = Field(..., gt=0, description="Talep edilen kredi tutarı (TL)")
     loan_term: int = Field(..., ge=6, le=360, description="Kredi vadesi (ay)")
     loan_purpose: str = Field(..., description="ev | araç | eğitim | iş | diğer")
-    interest_rate: float = Field(..., gt=0, le=1, description="Talep edilen faiz oranı (0.0–1.0)")
+    # Ondalık format (0.0–1.0); backend modele % formatında iletir (×100)
+    interest_rate: float = Field(..., gt=0, le=1, description="Yıllık faiz oranı (0.0–1.0, örn: 0.125 = %12.5)")
 
     # Kredi geçmişi
     credit_score: int = Field(..., ge=300, le=850, description="Kredi skoru")
@@ -22,43 +23,61 @@ class CreditAnalyzeRequest(BaseModel):
     has_mortgage: bool = Field(..., description="İpotekli mülk var mı?")
     has_co_signer: bool = Field(..., description="Kefil var mı?")
 
-    # Opsiyonel override'lar (profil/bütçeden otomatik alınır, göndermek zorunlu değil)
+    # Opsiyonel override'lar (profil/bütçeden otomatik alınır)
     months_employed: int | None = Field(default=None, ge=0, description="İstihdam süresi (ay)")
-    income_override: float | None = Field(default=None, gt=0, description="Aylık gelir override (profil bütçesinden alınır)")
+    income_override: float | None = Field(default=None, gt=0, description="Aylık gelir override (TL)")
 
 
 # ── Response ─────────────────────────────────────────────────────────
 
 class ShapFactor(BaseModel):
-    feature: str
-    value: float
-    impact: float        # pozitif = onay yönünde, negatif = red yönünde
-    impact_label: str    # "Olumlu" | "Olumsuz"
+    """En etkili feature'lardan biri için SHAP açıklaması."""
+    feature: str          # İngilizce teknik ad (örn: "DTIRatio")
+    feature_tr: str       # Türkçe ad (örn: "Borç/Gelir Oranı")
+    direction: str        # "+" = riski artırdı (olumsuz), "-" = riski azalttı (olumlu)
+    shap_value: float     # SHAP ağırlığı (mutlak değer büyüklüğü = etki)
+    impact_label: str     # "Olumsuz" | "Olumlu"
 
 
 class Counterfactual(BaseModel):
-    changes: dict[str, Any]          # {"CreditScore": 680, "DTIRatio": 0.32}
-    new_probability: float
-    would_approve: bool
+    """
+    DiCE-ML counterfactual senaryosu.
+    Ne değişseydi başvuru onaylanırdı?
+    """
+    changes: dict[str, Any]
+    # Örn: {"LoanAmount": {"from": 95000, "to": 61000},
+    #        "HasCoSigner": {"from": "No", "to": "Yes"}}
 
 
 class CreditAnalyzeResponse(BaseModel):
-    # Ana sonuç
-    approval_probability: float      # 0.0 – 1.0
+    analysis_id: str | None = None
+    # ── Ana Sonuç ─────────────────────────────────────────────────────
+    risk_score: float           # XGBoost çıktısı — temerrüt olasılığı (0=güvenli, 1=riskli)
+    approval_probability: float # 1 - risk_score — onaylanma ihtimali
     approved: bool
-    risk_band: str                   # Çok Düşük | Düşük | Orta | Yüksek | Çok Yüksek
-    optimal_threshold: float
+    approval_band: str          # "Çok Düşük Onaylanma Şansı" vb.
+    optimal_threshold: float    # Karar eşiği (metadata'dan)
 
-    # Faiz tahmini
-    estimated_interest_rate: float   # Onaylanırsa tahmini faiz
-    estimated_interest_rate_pct: str # "8.5%" formatında
+    # ── Faiz Tahmini (sadece approved) ───────────────────────────────
+    estimated_interest_rate: float | None      # Ondalık (örn: 0.12)
+    estimated_interest_rate_pct: str | None    # "%12.0" formatında
 
-    # Anomali
-    is_anomaly: bool                 # Tutarsız/sahte veri uyarısı
+    # ── Anomali ──────────────────────────────────────────────────────
+    is_anomaly: bool    # True = olağandışı/tutarsız başvuru
 
-    # Açıklamalar
-    shap_factors: list[ShapFactor]   # Top 5 etki eden feature
-    counterfactuals: list[Counterfactual]  # "Şunu yapsan onaylanırdın"
+    # ── SHAP Açıklaması (Top 3) ───────────────────────────────────────
+    shap_factors: list[ShapFactor]
 
-    # Özet mesaj
+    # ── Counterfactual (sadece rejected) ─────────────────────────────
+    counterfactuals: list[Counterfactual]
+
+    # ── Meta ──────────────────────────────────────────────────────────
+    model_version: str
     summary: str
+
+
+class CreditExplainRequest(BaseModel):
+    analysis_id: str
+
+class CreditExplainResponse(BaseModel):
+    explanation: str

@@ -22,11 +22,12 @@ async def generate_report(db: AsyncSession, user_id: uuid.UUID, request: ReportG
     analysis = await budget_service.calculate_health_score(db, user_id)
     
     health_score = analysis.get("score", 0.0)
+    details = analysis.get("details", {})
     summary_data = {
-        "dti": analysis.get("dti", 0.0),
+        "dti": analysis.get("dti_ratio", 0.0),
         "savings_rate": analysis.get("savings_rate", 0.0),
-        "total_income": analysis.get("total_income", 0.0),
-        "total_expense": analysis.get("total_expense", 0.0)
+        "total_income": details.get("total_income", 0.0),
+        "total_expense": details.get("total_expense", 0.0),
     }
     
     # Simple insights based on score
