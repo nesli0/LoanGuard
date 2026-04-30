@@ -1,0 +1,63 @@
+# ============================================================
+# LoanGuard — .dockerignore
+# Docker build context'inden dışlanan dosyalar
+# ============================================================
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Sanal ortam
+.venv/
+venv/
+env/
+
+# Jupyter / Notebook
+.ipynb_checkpoints/
+notebooks/
+
+# Model dosyaları — volume ile mount edilir, image'a gömme
+models/
+*.joblib
+*.pkl
+
+# Veri dosyaları — volume ile mount edilir
+data/
+
+# Test & CI
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Ortam değişkenleri — ASLA image'a gömme
+.env
+.env.*
+!.env.example
+
+# Dokümantasyon
+docs/
+reports/
+*.md
+README*
+
+# Scripts (ML eğitim scriptleri — backende gerek yok)
+scripts/
