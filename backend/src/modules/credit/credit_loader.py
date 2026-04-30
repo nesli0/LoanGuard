@@ -1,46 +1,96 @@
 """
-Model Loader — Singleton pattern.
-Tüm ML modelleri uygulama başlangıcında bir kez yüklenir,
-her request'te yeniden yüklenmez.
+ML Model Loader — Singleton pattern.
+
+LoanGuardPredictor ve DiceExplainer uygulama başlarken bir kez yüklenir,
+her request'te yeniden oluşturulmaz.
+
+Proje kökündeki src/ (ML mühendisinin modülleri) sys.path'e eklenerek
+import edilir — backend/src/ ile çakışmaz.
 """
 
+import json
+import sys
+import importlib.util
 from pathlib import Path
 
-import joblib
 from loguru import logger
 
-# Modeller backend/ klasörünün bir üstündeki models/ klasöründe
-MODELS_DIR = Path(__file__).resolve().parents[4] / "models"
+# Proje kökü: backend/src/modules/credit/ → 4 üst = LoanGuard/
+PROJECT_ROOT = Path(__file__).resolve().parents[4]
+MODELS_DIR = PROJECT_ROOT / "models"
+
+# ── Dynamic Import (Namespace çakışmasını önlemek için) ──────────────
+# Backend de "src" kullanıyor, ML kodları da "src" kullanıyor.
+# sys.path'e proje kökünü eklersek backend'in src'si ile çakışıyor.
+# importlib ile ML modüllerini manuel olarak sys.modules içine yüklüyoruz.
+def _load_ml_module(module_name: str, rel_path: str):
+    file_path = PROJECT_ROOT / rel_path
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+# Bağımlılık ağacına göre sırayla yükle
+_load_ml_module("src.features.ratios", "src/features/ratios.py")
+_load_ml_module("src.pipeline.interest_rate", "src/pipeline/interest_rate.py")
+predictor_mod = _load_ml_module("src.models.predictor", "src/models/predictor.py")
+dice_mod = _load_ml_module("src.explainability.dice_explainer", "src/explainability/dice_explainer.py")
+
+LoanGuardPredictor = predictor_mod.LoanGuardPredictor
+DiceExplainer = dice_mod.DiceExplainer
+
+# Warm-up için kullanılacak dummy veri (model lazy init'i tetikler)
+_WARMUP_INPUT = {
+    "Age": 35, "Income": 75000, "LoanAmount": 50000, "CreditScore": 650,
+    "MonthsEmployed": 48, "NumCreditLines": 3, "InterestRate": 12.5,
+    "LoanTerm": 36, "DTIRatio": 0.35,
+    "Education": "Bachelor's", "EmploymentType": "Full-time",
+    "MaritalStatus": "Married", "HasMortgage": "No",
+    "HasDependents": "Yes", "LoanPurpose": "Auto", "HasCoSigner": "No",
+}
 
 
-class MLModels:
+class MLLoader:
+    """LoanGuardPredictor + DiceExplainer singleton container."""
+
     def __init__(self) -> None:
-        self.xgboost = None
-        self.scaler = None
-        self.label_encoders: dict = {}
-        self.isolation_forest = None
+        self.predictor: LoanGuardPredictor | None = None
+        self.dice: DiceExplainer | None = None
+        self.model_version: str = "unknown"
         self._loaded = False
 
     def load(self) -> None:
         if self._loaded:
             return
         try:
-            logger.info(f"ML modelleri yükleniyor: {MODELS_DIR}")
+            # ── 1. Predictor ─────────────────────────────────────────
+            logger.info("LoanGuardPredictor yükleniyor...")
+            self.predictor = LoanGuardPredictor(model_dir=MODELS_DIR)
+            logger.success(
+                f"✓ LoanGuardPredictor hazır — threshold={self.predictor.threshold:.4f}"
+            )
 
-            self.xgboost = joblib.load(MODELS_DIR / "xgboost_risk_model.joblib")
-            logger.success("✓ XGBoost yüklendi")
+            # ── 2. DiceExplainer ─────────────────────────────────────
+            logger.info("DiceExplainer yükleniyor...")
+            self.dice = DiceExplainer(
+                model_dir=MODELS_DIR,
+                data_dir=PROJECT_ROOT / "data" / "interim",
+            )
+            logger.success("✓ DiceExplainer hazır")
 
-            self.scaler = joblib.load(MODELS_DIR / "scaler.joblib")
-            logger.success("✓ Scaler yüklendi")
+            # ── 3. Model versiyonunu oku ─────────────────────────────
+            with open(MODELS_DIR / "xgboost_metadata.json", encoding="utf-8") as f:
+                meta = json.load(f)
+            self.model_version = meta.get("model_version", "1.0.0")
 
-            self.label_encoders = joblib.load(MODELS_DIR / "label_encoders.joblib")
-            logger.success(f"✓ Label encoders yüklendi: {list(self.label_encoders.keys())}")
-
-            self.isolation_forest = joblib.load(MODELS_DIR / "isolation_forest.joblib")
-            logger.success("✓ Isolation Forest yüklendi")
+            # ── 4. Warm-up (race condition + lazy init önlemi) ────────
+            logger.info("Model warm-up başlıyor...")
+            self.predictor.predict(_WARMUP_INPUT)
+            logger.success("✓ Model warm-up tamamlandı — async istekler thread-safe")
 
             self._loaded = True
-            logger.success("Tüm ML modelleri hazır.")
+            logger.success(f"Tüm ML modelleri hazır (v{self.model_version})")
 
         except Exception as e:
             logger.error(f"ML model yükleme hatası: {e}")
@@ -51,5 +101,5 @@ class MLModels:
         return self._loaded
 
 
-# Global singleton — import edilip kullanılır
-ml_models = MLModels()
+# Global singleton — import edilerek kullanılır
+ml_loader = MLLoader()

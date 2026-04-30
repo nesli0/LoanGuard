@@ -1,37 +1,34 @@
 """
-Credit Service — Tüm ML pipeline burada çalışır.
+Credit Service — LoanGuardPredictor pipeline'ını çağırır.
 
 Akış:
-1. Input → Türkçe→İngilizce map + encode + scale
-2. XGBoost → approval_probability
-3. SHAP → feature impact açıklaması
-4. Isolation Forest → anomali tespiti
-5. Interest rate → metadata formülüyle hesap
-6. DiCE → counterfactual öneriler
-7. Sonuçları birleştir → CreditAnalyzeResponse
+1. Request → Türkçe→İngilizce map + birim dönüşümleri
+2. LoanGuardPredictor.predict() → anomaly_flag, risk_score, decision,
+                                   interest_rate, shap_top3
+3. decision == "rejected" → DiceExplainer.generate_counterfactuals()
+4. Sonuçları CreditAnalyzeResponse'a map et
+
+NOT:
+- Preprocessing (encode, ratio hesaplama, scale) predictor içinde yapılıyor.
+- InterestRate: frontend ondalık (0.125) gönderir; biz ×100 yaparak
+  modele % olarak (12.5) iletiriz (B seçeneği — frontend değişmez).
+- risk_score: temerrüt olasılığı. Düşük = iyi. approval_probability = 1 - risk_score.
 """
 
 import warnings
-from typing import Any
-
-import numpy as np
-import pandas as pd
-import shap
 
 from src.core.exceptions import AppException
 from src.modules.credit.credit_constants import (
-    BASE_RATE,
+    APPROVAL_BANDS,
     CREDIT_ML_ERROR,
     CREDIT_PROFILE_INCOMPLETE,
     EDUCATION_MAP,
     EMPLOYMENT_MAP,
+    FEATURE_NAMES_TR,
     LOAN_PURPOSE_MAP,
     MARITAL_MAP,
-    MAX_RATE,
-    RISK_BANDS,
-    RISK_PREMIUM_MAX,
 )
-from src.modules.credit.credit_loader import ml_models
+from src.modules.credit.credit_loader import ml_loader
 from src.modules.credit.credit_schemas import (
     Counterfactual,
     CreditAnalyzeRequest,
@@ -40,28 +37,6 @@ from src.modules.credit.credit_schemas import (
 )
 
 warnings.filterwarnings("ignore")
-
-# XGBoost'un beklediği feature sırası (metadata'dan)
-FEATURE_ORDER = [
-    "Age", "Income", "LoanAmount", "CreditScore", "MonthsEmployed",
-    "NumCreditLines", "InterestRate", "LoanTerm", "DTIRatio",
-    "Education", "EmploymentType", "MaritalStatus",
-    "HasMortgage", "HasDependents", "LoanPurpose", "HasCoSigner",
-]
-
-# Scaler yalnızca bu 9 numerik feature ile eğitildi
-NUMERIC_FEATURES = [
-    "Age", "Income", "LoanAmount", "CreditScore", "MonthsEmployed",
-    "NumCreditLines", "InterestRate", "LoanTerm", "DTIRatio",
-]
-
-# Kategorik feature'lar encode edilmiş haliyle direkt girilir (scale edilmez)
-CATEGORICAL_FEATURES = [
-    "Education", "EmploymentType", "MaritalStatus",
-    "HasMortgage", "HasDependents", "LoanPurpose", "HasCoSigner",
-]
-
-OPTIMAL_THRESHOLD = 0.6491304347826087
 
 
 # ── Yardımcı Fonksiyonlar ────────────────────────────────────────────
@@ -76,44 +51,24 @@ def _map_field(value: str | None, mapping: dict, field_name: str) -> str:
     return mapping[key]
 
 
-def _encode_categorical(value: str, feature: str) -> int:
-    """Label encoder ile kategorik değeri int'e dönüştür."""
-    le = ml_models.label_encoders.get(feature)
-    if le is None:
-        return 0
-    try:
-        return int(le.transform([value])[0])
-    except ValueError:
-        # Bilinmeyen değer → en yakın sınıf
-        return 0
-
-
-def _get_risk_band(probability: float) -> str:
-    for name, low, high in RISK_BANDS:
-        if low <= probability < high:
+def _get_approval_band(approval_probability: float) -> str:
+    """approval_probability (0–1) → insan okunur onaylanma bandı."""
+    for name, low, high in APPROVAL_BANDS:
+        if low <= approval_probability < high:
             return name
-    return "Çok Yüksek"
+    return "Çok Yüksek Onaylanma Şansı"
 
 
-def _estimate_interest_rate(approval_prob: float) -> float:
-    """
-    Lineer interpolasyon:
-    Düşük olasılık → yüksek faiz risk primi
-    """
-    rejection_prob = 1.0 - approval_prob
-    rate = BASE_RATE + RISK_PREMIUM_MAX * rejection_prob
-    return round(min(rate, MAX_RATE), 4)
-
-
-def _build_summary(approved: bool, prob: float, risk_band: str) -> str:
+def _build_summary(approved: bool, approval_probability: float, approval_band: str) -> str:
+    pct = approval_probability * 100
     if approved:
         return (
-            f"Kredi başvurunuzun onaylanma olasılığı %{prob*100:.1f}. "
-            f"Risk düzeyiniz '{risk_band}' kategorisindedir."
+            f"Kredi başvurunuzun onaylanma olasılığı %{pct:.1f}. "
+            f"Durumunuz '{approval_band}' kategorisindedir."
         )
     return (
-        f"Mevcut profilinizle onaylanma olasılığı %{prob*100:.1f}. "
-        f"Aşağıdaki önerileri uygulayarak şansınızı artırabilirsiniz."
+        f"Mevcut profilinizle onaylanma olasılığı %{pct:.1f}. "
+        f"Aşağıdaki counterfactual senaryolarını uygulayarak şansınızı artırabilirsiniz."
     )
 
 
@@ -126,7 +81,7 @@ async def analyze_credit(
     monthly_income: float,
 ) -> CreditAnalyzeResponse:
     """
-    Kredi analizi pipeline'ını çalıştırır.
+    LoanGuardPredictor pipeline'ını çalıştırır.
 
     Args:
         req: Kullanıcıdan gelen kredi talep bilgileri
@@ -134,7 +89,7 @@ async def analyze_credit(
         dti_ratio: Bütçeden hesaplanan DTI (loan_payments / income)
         monthly_income: Son dönem aylık gelir
     """
-    if not ml_models.is_ready:
+    if not ml_loader.is_ready:
         raise AppException(503, "ML servisi hazır değil.", CREDIT_ML_ERROR)
 
     try:
@@ -142,178 +97,106 @@ async def analyze_credit(
         income = req.income_override or monthly_income
         months_employed = req.months_employed or 0
 
-        # Türkçe → İngilizce
-        edu_en  = _map_field(profile.get("education"), EDUCATION_MAP, "education")
-        emp_en  = _map_field(profile.get("employment_type"), EMPLOYMENT_MAP, "employment_type")
-        mar_en  = _map_field(profile.get("marital_status"), MARITAL_MAP, "marital_status")
-        purp_en = _map_field(req.loan_purpose, LOAN_PURPOSE_MAP, "loan_purpose")
+        # Türkçe → İngilizce (string kategorikler; predictor encode eder)
+        edu_en  = _map_field(profile.get("education"),       EDUCATION_MAP,    "education")
+        emp_en  = _map_field(profile.get("employment_type"), EMPLOYMENT_MAP,   "employment_type")
+        mar_en  = _map_field(profile.get("marital_status"),  MARITAL_MAP,      "marital_status")
+        purp_en = _map_field(req.loan_purpose,               LOAN_PURPOSE_MAP, "loan_purpose")
 
         has_dependents_str = "Yes" if (profile.get("dependents") or 0) > 0 else "No"
-        has_mortgage_str   = "Yes" if req.has_mortgage else "No"
-        has_cosigner_str   = "Yes" if req.has_co_signer else "No"
+        has_mortgage_str   = "Yes" if req.has_mortgage   else "No"
+        has_cosigner_str   = "Yes" if req.has_co_signer  else "No"
 
-        # ── 2. Raw Feature Dict ───────────────────────────────────────
-        raw: dict[str, Any] = {
-            "Age":             profile.get("age") or 30,
-            "Income":          income,
-            "LoanAmount":      req.loan_amount,
-            "CreditScore":     req.credit_score,
-            "MonthsEmployed":  months_employed,
-            "NumCreditLines":  req.num_credit_lines,
-            "InterestRate":    req.interest_rate,
-            "LoanTerm":        req.loan_term,
-            "DTIRatio":        dti_ratio,
-            "Education":       _encode_categorical(edu_en, "Education"),
-            "EmploymentType":  _encode_categorical(emp_en, "EmploymentType"),
-            "MaritalStatus":   _encode_categorical(mar_en, "MaritalStatus"),
-            "HasMortgage":     _encode_categorical(has_mortgage_str, "HasMortgage"),
-            "HasDependents":   _encode_categorical(has_dependents_str, "HasDependents"),
-            "LoanPurpose":     _encode_categorical(purp_en, "LoanPurpose"),
-            "HasCoSigner":     _encode_categorical(has_cosigner_str, "HasCoSigner"),
+        # InterestRate: frontend ondalık (0.125) → model % (12.5) [Seçenek B]
+        interest_rate_pct = req.interest_rate * 100
+
+        # LoanGuardPredictor beklediği format (ham veri, string kategorikler)
+        model_input = {
+            "Age":            profile.get("age") or 30,
+            "Income":         income,
+            "LoanAmount":     req.loan_amount,
+            "CreditScore":    req.credit_score,
+            "MonthsEmployed": months_employed,
+            "NumCreditLines": req.num_credit_lines,
+            "InterestRate":   interest_rate_pct,      # % formatında
+            "LoanTerm":       req.loan_term,
+            "DTIRatio":       dti_ratio,
+            "Education":      edu_en,
+            "EmploymentType": emp_en,
+            "MaritalStatus":  mar_en,
+            "HasMortgage":    has_mortgage_str,
+            "HasDependents":  has_dependents_str,
+            "LoanPurpose":    purp_en,
+            "HasCoSigner":    has_cosigner_str,
         }
 
-        # ── 3. Scale (sadece numerik feature'lar) ─────────────────────
-        # Scaler yalnızca 9 numerik feature ile eğitildi;
-        # kategorikler encode edilmiş int olarak direkt eklenir.
-        df_numeric = pd.DataFrame([{f: raw[f] for f in NUMERIC_FEATURES}])
-        scaled_values = ml_models.scaler.transform(df_numeric)
-        df_scaled_numeric = pd.DataFrame(scaled_values, columns=NUMERIC_FEATURES)
+        # ── 2. Predictor Pipeline ─────────────────────────────────────
+        # Içeride: encode → add_ratios (4 yeni feature) → scale → XGBoost → SHAP
+        try:
+            raw_result = ml_loader.predictor.predict(model_input)
+        except ValueError as e:
+            # Unseen categorical değer → 400 Bad Request
+            raise AppException(400, str(e), CREDIT_PROFILE_INCOMPLETE) from e
 
-        # Kategorikleri ekle
-        df_categorical = pd.DataFrame([{f: raw[f] for f in CATEGORICAL_FEATURES}])
+        risk_score          = raw_result["risk_score"]           # temerrüt olasılığı (düşük=iyi)
+        approval_probability = round(1.0 - risk_score, 4)        # onaylanma ihtimali
+        approved            = raw_result["decision"] == "approved"
+        is_anomaly          = raw_result["anomaly_flag"]
+        approval_band       = _get_approval_band(approval_probability)
 
-        # FEATURE_ORDER sırasına göre birleştir
-        df_scaled = pd.concat([df_scaled_numeric, df_categorical], axis=1)[FEATURE_ORDER]
-
-        # ── 4. XGBoost Tahmin ────────────────────────────────────────
-        prob = float(ml_models.xgboost.predict_proba(df_scaled)[0][1])
-        approved = prob >= OPTIMAL_THRESHOLD
-        risk_band = _get_risk_band(prob)
-
-        # ── 5. SHAP Açıklaması ───────────────────────────────────────
-        explainer = shap.TreeExplainer(ml_models.xgboost)
-        shap_values = explainer.shap_values(df_scaled)
-
-        # Sınıf 1 (onay) için SHAP değerleri
-        sv = shap_values[0] if isinstance(shap_values, list) else shap_values[0]
-
-        # Top 5 feature (mutlak etki büyüklüğüne göre sırala)
-        impact_pairs = sorted(
-            zip(FEATURE_ORDER, sv), key=lambda x: abs(x[1]), reverse=True
-        )[:5]
-
+        # ── 3. SHAP Mapping ───────────────────────────────────────────
+        # Predictor top3 döndürür; biz türkçe ad ve impact_label ekleriz
         shap_factors = [
             ShapFactor(
-                feature=feat,
-                value=float(raw[feat]),
-                impact=round(float(imp), 4),
-                impact_label="Olumlu" if imp > 0 else "Olumsuz",
+                feature=item["feature"],
+                feature_tr=FEATURE_NAMES_TR.get(item["feature"], item["feature"]),
+                direction=item["direction"],
+                shap_value=item["shap_value"],
+                # "+" yönü = riski artırdı = olumsuz (temerrüt modelinde)
+                impact_label="Olumsuz" if item["direction"] == "+" else "Olumlu",
             )
-            for feat, imp in impact_pairs
+            for item in raw_result["shap_top3"]
         ]
 
-        # ── 6. Anomali Tespiti ───────────────────────────────────────
-        isolation_score = float(ml_models.isolation_forest.score_samples(df_scaled)[0])
-        anomaly_threshold = -0.5770649661752837  # metadata'dan
-        is_anomaly = isolation_score < anomaly_threshold
+        # ── 4. Faiz Tahmini ───────────────────────────────────────────
+        # Predictor zaten approved kontrolü yapar; reddedilirse None döner
+        # Predictor % olarak döndürür (örn: 12.0 = %12); biz ondalığa çeviririz
+        if raw_result["interest_rate"] is not None:
+            est_rate = round(raw_result["interest_rate"] / 100, 4)
+            est_rate_pct = f"%{raw_result['interest_rate']:.1f}"
+        else:
+            est_rate = None
+            est_rate_pct = None
 
-        # ── 7. Faiz Tahmini ──────────────────────────────────────────
-        est_rate = _estimate_interest_rate(prob)
+        # ── 5. Counterfactual (sadece rejected) ───────────────────────
+        if not approved:
+            dice_raw = ml_loader.dice.generate_counterfactuals(model_input)
+            # DiceExplainer → [{"changes": {"LoanAmount": {"from": X, "to": Y}}}]
+            counterfactuals = [
+                Counterfactual(changes=cf["changes"])
+                for cf in dice_raw
+                if cf.get("changes")
+            ]
+        else:
+            counterfactuals = []
 
-        # ── 8. Counterfactual Öneriler ───────────────────────────────
-        counterfactuals = _generate_counterfactuals(df_scaled, raw, prob)
-
-        # ── 9. Sonuç ─────────────────────────────────────────────────
+        # ── 6. Response ───────────────────────────────────────────────
         return CreditAnalyzeResponse(
-            approval_probability=round(prob, 4),
+            risk_score=round(risk_score, 4),
+            approval_probability=approval_probability,
             approved=approved,
-            risk_band=risk_band,
-            optimal_threshold=OPTIMAL_THRESHOLD,
+            approval_band=approval_band,
+            optimal_threshold=ml_loader.predictor.threshold,
             estimated_interest_rate=est_rate,
-            estimated_interest_rate_pct=f"%{est_rate*100:.1f}",
+            estimated_interest_rate_pct=est_rate_pct,
             is_anomaly=is_anomaly,
             shap_factors=shap_factors,
             counterfactuals=counterfactuals,
-            summary=_build_summary(approved, prob, risk_band),
+            model_version=ml_loader.model_version,
+            summary=_build_summary(approved, approval_probability, approval_band),
         )
 
     except AppException:
         raise
     except Exception as e:
         raise AppException(500, f"Kredi analizi sırasında hata: {str(e)}", CREDIT_ML_ERROR) from e
-
-
-def _generate_counterfactuals(
-    df_scaled: pd.DataFrame,
-    raw: dict,
-    current_prob: float,
-    n: int = 3,
-) -> list[Counterfactual]:
-    """
-    Basit counterfactual üretimi:
-    Sayısal feature'ları iyileştirerek hedef threshold'u geçmeye çalışır.
-    """
-    if current_prob >= OPTIMAL_THRESHOLD:
-        return []  # Zaten onaylı, counterfactual gerekmez
-
-    results = []
-    numeric_improvements = [
-        ("CreditScore",    50,  850),    # +50 kredi skoru
-        ("DTIRatio",      -0.05, 0.0),   # -5% DTI
-        ("MonthsEmployed", 12, None),    # +12 ay çalışma
-        ("Income",         0.15, None),  # +%15 gelir
-    ]
-
-    for feat, delta, cap in numeric_improvements:
-        if feat not in raw:
-            continue
-
-        # 1. Yeni ham değeri hesapla
-        current_val = raw[feat]
-        if isinstance(delta, float) and abs(delta) < 1:
-            # Yüzdesel değişim (örn: Income +%15)
-            new_val = current_val * (1 + delta)
-        else:
-            # Sabit değişim (örn: CreditScore +50)
-            new_val = current_val + delta
-
-        # Cap (Sınır) kontrolü
-        if cap is not None:
-            new_val = min(new_val, cap) if delta > 0 else max(new_val, cap)
-
-        # 2. Bu değişikliği içeren bir raw bütçe oluşturup scale etmemiz lazım
-        # Sadece bu feature'ı değiştirip diğerlerini aynı bırakarak yeni bir scaled row üretelim
-        trial_raw = raw.copy()
-        trial_raw[feat] = new_val
-        
-        try:
-            # Numerik kısmını ayır ve scale et
-            df_trial_num = pd.DataFrame([{f: trial_raw[f] for f in NUMERIC_FEATURES}])
-            scaled_vals = ml_models.scaler.transform(df_trial_num)
-            df_trial_scaled_num = pd.DataFrame(scaled_vals, columns=NUMERIC_FEATURES)
-            
-            # Kategorik kısmı (değişmedi ama yapı için lazım)
-            df_trial_cat = pd.DataFrame([{f: trial_raw[f] for f in CATEGORICAL_FEATURES}])
-            
-            # Birleştir
-            df_trial_final = pd.concat([df_trial_scaled_num, df_trial_cat], axis=1)[FEATURE_ORDER]
-
-            # 3. Model tahmini
-            new_prob = float(ml_models.xgboost.predict_proba(df_trial_final)[0][1])
-            
-            if new_prob > current_prob:
-                results.append(Counterfactual(
-                    changes={feat: round(new_val, 2)},
-                    new_probability=round(new_prob, 4),
-                    would_approve=new_prob >= OPTIMAL_THRESHOLD,
-                ))
-        except Exception:
-            continue
-
-
-        if len(results) >= n:
-            break
-
-    # Sonuçları iyileştirme etkisine göre sırala
-    results.sort(key=lambda x: x.new_probability, reverse=True)
-    return results

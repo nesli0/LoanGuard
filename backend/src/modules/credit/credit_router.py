@@ -11,16 +11,18 @@ from src.models.profile_model import Profile
 from src.models.financial_model import FinancialEntry, FinancialPeriod
 from src.models.user_model import User
 from src.modules.credit import credit_service
-from src.modules.credit.credit_loader import ml_models
-from src.modules.credit.credit_schemas import CreditAnalyzeRequest, CreditAnalyzeResponse
+from src.modules.credit.credit_schemas import (
+    CreditAnalyzeRequest, 
+    CreditAnalyzeResponse,
+    CreditExplainRequest,
+    CreditExplainResponse
+)
+from src.core.llm_service import generate_credit_explanation
 
 router = APIRouter(prefix="/credit", tags=["Credit"])
 
-
-@router.on_event("startup")
-async def load_models() -> None:
-    """Uygulama başlarken ML modellerini yükle."""
-    ml_models.load()
+# NOT: Model yüklemesi main.py lifespan'inde yapılıyor.
+# @router.on_event("startup") kaldırıldı.
 
 
 @router.post("/analyze")
@@ -30,7 +32,7 @@ async def analyze_credit(
     db: AsyncSession = Depends(get_db),
 ) -> ApiResponse[CreditAnalyzeResponse]:
     """
-    Kredi analizi — XGBoost + SHAP + Anomali + Faiz Tahmini + Counterfactual.
+    Kredi analizi — XGBoost + SHAP + Anomali + Faiz Tahmini + DiCE Counterfactual.
 
     Kullanıcının profil ve bütçe verisi otomatik olarak çekilir.
     Sadece kredi talep bilgilerini göndermeniz yeterlidir.
@@ -69,7 +71,7 @@ async def analyze_credit(
         )
         entries = entries_result.scalars().all()
 
-        total_income = sum(e.amount for e in entries if e.type == "income")
+        total_income  = sum(e.amount for e in entries if e.type == "income")
         loan_payments = sum(e.amount for e in entries if e.is_loan_payment)
 
         monthly_income = total_income
@@ -92,8 +94,51 @@ async def analyze_credit(
     )
     db.add(analysis)
     await db.commit()
+    await db.refresh(analysis)
+    
+    result.analysis_id = str(analysis.id)
 
     return ApiResponse(
         message="Kredi analizi tamamlandı.",
         data=result,
+    )
+
+
+@router.post("/explain")
+async def explain_credit(
+    body: CreditExplainRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[CreditExplainResponse]:
+    """
+    Kullanıcının kredi analiz sonucunu yapay zeka ile Türkçe açıklar.
+    """
+    # Fetch analysis
+    import uuid
+    try:
+        analysis_uuid = uuid.UUID(body.analysis_id)
+    except ValueError:
+        raise AppException(400, "Geçersiz analiz ID formatı.", "INVALID_ANALYSIS_ID")
+
+    result = await db.execute(
+        select(CreditAnalysis)
+        .where(CreditAnalysis.id == analysis_uuid)
+        .where(CreditAnalysis.user_id == current_user.id)
+    )
+    analysis = result.scalar_one_or_none()
+    
+    if not analysis:
+        raise AppException(404, "Kredi analizi bulunamadı veya size ait değil.", "ANALYSIS_NOT_FOUND")
+        
+    analysis_data = {
+        "approval_probability": analysis.approval_probability,
+        "shap_factors": analysis.shap_factors,
+        "counterfactuals": analysis.counterfactuals
+    }
+    
+    explanation = await generate_credit_explanation(analysis_data)
+    
+    return ApiResponse(
+        message="Kredi analizi açıklaması oluşturuldu.",
+        data=CreditExplainResponse(explanation=explanation)
     )

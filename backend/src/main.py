@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +15,7 @@ from src.core.exceptions import (
     validation_exception_handler,
 )
 from src.core.middlewares.logging_middleware import logging_middleware
+from src.modules.credit.credit_loader import ml_loader
 
 # ── Routers ──────────────────────────────────────────────────────────
 from src.modules.auth.auth_router import router as auth_router
@@ -30,6 +33,16 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from src.core.middlewares.rate_limiter import limiter
 
+
+# ── Lifespan (startup / shutdown) ────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """ML modellerini uygulama başlarken bir kez yükle."""
+    ml_loader.load()   # LoanGuardPredictor + DiceExplainer + warm-up
+    yield
+    # shutdown: gerekirse cleanup buraya
+
+
 # ── App ──────────────────────────────────────────────────────────────
 app = FastAPI(
     title="LoanGuard API",
@@ -37,6 +50,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────
