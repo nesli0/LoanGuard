@@ -77,6 +77,10 @@ async def analyze_credit(
         monthly_income = total_income
         dti_ratio = round(loan_payments / total_income, 4) if total_income > 0 else 0.0
 
+    # Bütçe girişi yoksa profildeki monthly_income'u fallback olarak kullan
+    if monthly_income == 0.0 and profile.monthly_income:
+        monthly_income = float(profile.monthly_income)
+
     # ── 3. ML Pipeline ─────────────────────────────────────────────
     result = await credit_service.analyze_credit(
         req=body,

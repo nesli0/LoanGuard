@@ -16,6 +16,8 @@ class ProfileBase(BaseModel):
     education: str | None = Field(default=None, description="ilkokul | lise | üniversite | yükseklisans")
     dependents: int | None = Field(default=None, ge=0, description="Bakmakla yükümlü olunan kişi sayısı")
     city: str | None = Field(default=None, description="Şehir")
+    monthly_income: float | None = Field(default=None, ge=0, description="Aylık gelir")
+    risk_tolerance: str | None = Field(default=None, description="Düşük | Orta | Yüksek")
 
 
 class ProfileUpdateRequest(ProfileBase):

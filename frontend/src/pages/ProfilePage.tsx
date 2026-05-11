@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -43,7 +43,8 @@ export function ProfilePage() {
   const [currentStep, setCurrentStep] = useState(1)
   const queryClient = useQueryClient()
   const location = useLocation()
-  
+  const navigate = useNavigate()
+
   const isOnboarding = location.state?.requiresProfile
 
   const { data: profileRes, isLoading: isFetching } = useQuery({
@@ -91,7 +92,7 @@ export function ProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] })
-      // TODO: Başarılı mesajı eklenebilir
+      navigate('/dashboard')
     }
   })
 
@@ -214,7 +215,7 @@ export function ProfilePage() {
                   name="employment_type"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seçiniz" />
                       </SelectTrigger>
@@ -236,7 +237,7 @@ export function ProfilePage() {
                   name="education"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seçiniz" />
                       </SelectTrigger>
@@ -259,7 +260,7 @@ export function ProfilePage() {
                   name="marital_status"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seçiniz" />
                       </SelectTrigger>
@@ -300,7 +301,7 @@ export function ProfilePage() {
                   name="risk_tolerance"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger>
                         <SelectValue placeholder="Seçiniz" />
                       </SelectTrigger>

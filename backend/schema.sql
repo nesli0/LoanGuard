@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   education        TEXT,           -- ilkokul | lise | üniversite | yükseklisans
   dependents       INT DEFAULT 0,
   city             TEXT,
+  monthly_income   NUMERIC,        -- Aylık gelir
+  risk_tolerance   TEXT,           -- Düşük | Orta | Yüksek
 
   created_at       TIMESTAMPTZ DEFAULT NOW(),
   updated_at       TIMESTAMPTZ DEFAULT NOW()

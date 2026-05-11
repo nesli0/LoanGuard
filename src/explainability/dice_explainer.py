@@ -38,7 +38,7 @@ NUMERICAL_COLS_ALL = NUMERICAL_COLS_ORIGINAL + [
 ]
 
 # Features an applicant can realistically change before reapplying
-ACTIONABLE_FEATURES = ["LoanAmount", "HasCoSigner", "Income"]
+ACTIONABLE_FEATURES = ["LoanAmount", "Income", "MonthsEmployed", "InterestRate"]
 
 
 
@@ -148,7 +148,7 @@ class DiceExplainer:
             outcome_name="Default",
         )
         m = dice_ml.Model(model=wrapper, backend="sklearn", model_type="classifier")
-        return dice_ml.Dice(d, m, method="random")
+        return dice_ml.Dice(d, m, method="genetic")
 
     def generate_counterfactuals(
         self,
@@ -183,13 +183,13 @@ class DiceExplainer:
                     total_CFs=n_cf,
                     desired_class=0,       # Default=0 means approved
                     features_to_vary=features_to_vary,
-                    random_seed=self.random_state,
                 )
             cf_df = cf_result.cf_examples_list[0].final_cfs_df
             if cf_df is None or cf_df.empty:
                 return []
             return self._format_output(query_df, cf_df, features_to_vary)
-        except Exception:
+        except Exception as e:
+            warnings.warn(f"DiCE counterfactual generation failed: {e}")
             return []
 
     def _format_output(
