@@ -73,7 +73,7 @@ export function InvestmentPage() {
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [isRetaking, setIsRetaking] = useState(false)
 
-  const { data: profileRes, isLoading, isError } = useQuery({
+  const { data: profileRes, isLoading } = useQuery({
     queryKey: ['investment-profile'],
     queryFn: async () => {
       try {

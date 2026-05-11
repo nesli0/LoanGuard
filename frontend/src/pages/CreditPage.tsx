@@ -10,7 +10,6 @@ import {
 } from 'recharts'
 
 import api from '@/api/axios'
-import { formatCurrency, formatPercent } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -265,7 +264,7 @@ export function CreditPage() {
                         <XAxis type="number" hide />
                         <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#0F172A', fontWeight: 500 }} width={120} />
                         <RechartsTooltip 
-                          formatter={(val: any, name: any, props: any) => [
+                          formatter={(_val: any, _name: any, props: any) => [
                             props.payload.direction === '+' ? 'Riski Artırdı' : 'Riski Azalttı', 
                             'Etki Yönü'
                           ]}

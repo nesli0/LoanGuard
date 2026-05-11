@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Edit2, ChevronLeft, ChevronRight, Check, X } from 'lucide-react'
+import { Plus, Trash2, Edit2, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '@/api/axios'
 import { formatCurrency, getMonthName } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
-import type { ApiResponse, BudgetPeriod, BudgetEntryCreate, BudgetEntry } from '@/types'
+import type { ApiResponse, BudgetPeriod, BudgetEntryCreate } from '@/types'
 
 type EntryType = 'income' | 'expense'
 

@@ -45,7 +45,9 @@ def _map_field(value: str | None, mapping: dict, field_name: str) -> str:
     """Türkçe değeri İngilizce karşılığına çevir."""
     if value is None:
         raise AppException(422, f"Profil eksik: '{field_name}' alanı doldurulmalı.", CREDIT_PROFILE_INCOMPLETE)
-    key = value.lower().strip()
+    # "İ" (U+0130) → Python .lower() produces "i̇" (combining dot), not "i".
+    # Replace manually before lowercasing to handle Turkish capital İ correctly.
+    key = value.replace("İ", "i").replace("I", "ı").lower().strip()
     if key not in mapping:
         raise AppException(422, f"Geçersiz '{field_name}' değeri: {value}", CREDIT_PROFILE_INCOMPLETE)
     return mapping[key]

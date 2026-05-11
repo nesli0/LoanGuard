@@ -1,21 +1,27 @@
 # ── Türkçe → İngilizce Mapping (Label Encoder değerleriyle eşleşmeli) ──
 
 EDUCATION_MAP = {
-    "ilkokul":      "High School",
-    "ortaokul":     "High School",
-    "lise":         "High School",
-    "önlisans":     "Bachelor's",
-    "üniversite":   "Bachelor's",
-    "yükseklisans": "Master's",
-    "doktora":      "PhD",
+    "ilkokul":        "High School",
+    "ilköğretim":     "High School",
+    "ortaokul":       "High School",
+    "lise":           "High School",
+    "önlisans":       "Bachelor's",
+    "lisans":         "Bachelor's",
+    "üniversite":     "Bachelor's",
+    "yükseklisans":   "Master's",
+    "yüksek lisans":  "Master's",
+    "doktora":        "PhD",
 }
 
 EMPLOYMENT_MAP = {
-    "maaşlı":  "Full-time",
-    "yarı":    "Part-time",
-    "serbest": "Self-employed",
-    "işsiz":   "Unemployed",
-    "emekli":  "Part-time",
+    "maaşlı":   "Full-time",
+    "yarı":     "Part-time",
+    "serbest":  "Self-employed",
+    "işveren":  "Self-employed",
+    "işsiz":    "Unemployed",
+    "emekli":   "Part-time",
+    "öğrenci":  "Unemployed",
+    "ogrenci":  "Unemployed",
 }
 
 MARITAL_MAP = {

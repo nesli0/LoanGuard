@@ -58,6 +58,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── React/Vite Frontend ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: loanguard_frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy   # API hazır olmadan frontend başlamaz
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    volumes:
+      - ./frontend/src:/app/src        # hot-reload için frontend kaynak kodu
+    ports:
+      - "5173:5173"
+
 volumes:
   postgres_data:
     name: loanguard_postgres_data
