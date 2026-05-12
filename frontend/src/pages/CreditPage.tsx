@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
-import { Loader2, ArrowRight, ShieldCheck, Info } from 'lucide-react'
+import { Loader2, ArrowRight, ShieldCheck, Info, Sparkles } from 'lucide-react'
 import {
   RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Cell
@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { ApiResponse } from '@/types'
 
 const schema = z.object({
@@ -34,6 +35,7 @@ type FormData = z.infer<typeof schema>
 
 export function CreditPage() {
   const [result, setResult] = useState<any | null>(null)
+  const [aiExplanation, setAiExplanation] = useState<string | null>(null)
 
   const {
     register,
@@ -55,6 +57,16 @@ export function CreditPage() {
     }
   })
 
+  const { mutate: explainMutate, isPending: isExplaining } = useMutation({
+    mutationFn: async (analysisId: string) => {
+      const res = await api.post<ApiResponse<{ explanation: string }>>('/credit/explain', { analysis_id: analysisId })
+      return res.data.data.explanation
+    },
+    onSuccess: (explanation) => {
+      setAiExplanation(explanation)
+    },
+  })
+
   const { mutate, isPending, error } = useMutation({
     mutationFn: async (data: FormData) => {
       const res = await api.post<ApiResponse<any>>('/credit/analyze', data)
@@ -62,6 +74,10 @@ export function CreditPage() {
     },
     onSuccess: (data) => {
       setResult(data)
+      setAiExplanation(null)
+      if (data.analysis_id && data.counterfactuals?.length > 0) {
+        explainMutate(data.analysis_id)
+      }
     }
   })
 
@@ -284,23 +300,44 @@ export function CreditPage() {
               {/* 3. Öneriler (Counterfactuals) */}
               {result.counterfactuals && result.counterfactuals.length > 0 && (
                 <div>
-                  <h3 className="text-base font-semibold text-[#0F172A] mb-4">Onay Almak İçin Öneriler</h3>
-                  <div className="space-y-3">
-                    {result.counterfactuals.map((cf: any, i: number) => (
-                      <div key={i} className="p-4 rounded-lg border-2 border-[#A7F3D0] bg-[#ECFDF5] flex items-center justify-between group transition-all hover:shadow-md">
-                        <div className="space-y-1">
-                          {Object.entries(cf.changes).map(([key, val]: [string, any]) => (
-                            <div key={key} className="text-sm font-medium text-[#065F46]">
-                              {key} değerini <span className="font-bold">{val.from}</span> yerine <span className="font-bold text-[#059669]">{val.to}</span> yapın.
-                            </div>
-                          ))}
-                        </div>
-                        <Badge variant="success" className="shrink-0">
-                          Onaylanır <ArrowRight className="w-3 h-3 ml-1" />
-                        </Badge>
+                  <h3 className="text-base font-semibold text-[#0F172A] mb-4 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#7C3AED]" /> Onay Almak İçin Öneriler
+                  </h3>
+
+                  {isExplaining ? (
+                    <div className="space-y-3 p-4 rounded-lg border border-[#E9D5FF] bg-[#FAF5FF]">
+                      <div className="flex items-center gap-2 text-sm text-[#7C3AED] font-medium mb-3">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Yapay Zeka önerileri yorumluyor...
                       </div>
-                    ))}
-                  </div>
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-5/6" />
+                      <Skeleton className="h-4 w-4/6" />
+                    </div>
+                  ) : aiExplanation ? (
+                    <div className="p-5 rounded-lg border border-[#E9D5FF] bg-[#FAF5FF]">
+                      <p className="text-sm leading-relaxed text-[#3B0764] whitespace-pre-line">
+                        {aiExplanation}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {result.counterfactuals.map((cf: any, i: number) => (
+                        <div key={i} className="p-4 rounded-lg border-2 border-[#A7F3D0] bg-[#ECFDF5] flex items-center justify-between group transition-all hover:shadow-md">
+                          <div className="space-y-1">
+                            {Object.entries(cf.changes).map(([key, val]: [string, any]) => (
+                              <div key={key} className="text-sm font-medium text-[#065F46]">
+                                {key} değerini <span className="font-bold">{val.from}</span> yerine <span className="font-bold text-[#059669]">{val.to}</span> yapın.
+                              </div>
+                            ))}
+                          </div>
+                          <Badge variant="success" className="shrink-0">
+                            Onaylanır <ArrowRight className="w-3 h-3 ml-1" />
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
