@@ -1,0 +1,875 @@
+{
+  "info": {
+    "name": "LoanGuard API",
+    "description": "LoanGuard - Kişisel Finansal Sağlık & Kredi Analiz Platformu\n\n## Kullanım Sırası\n1. Auth > Register ile kullanıcı oluştur\n2. Auth > Login ile token al (otomatik `{{token}}` değişkenine kaydedilir)\n3. Profile > Update ile profili doldur (kredi analizi için zorunlu)\n4. Budget > Create ile bütçe verisi gir\n5. Diğer modülleri test et",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "goal_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "alert_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analysis_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@loanguard.com\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.access_token) {",
+                  "  pm.collectionVariables.set('token', json.data.access_token);",
+                  "  console.log('Token saved:', json.data.access_token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username_or_email\": \"test@loanguard.com\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Me (Oturum Bilgisi)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "👤 Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "profile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Ahmet\",\n  \"last_name\": \"Yılmaz\",\n  \"phone\": \"+905551234567\",\n  \"age\": 32,\n  \"marital_status\": \"evli\",\n  \"employment_type\": \"maaşlı\",\n  \"education\": \"üniversite\",\n  \"dependents\": 1,\n  \"city\": \"İstanbul\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "💰 Budget",
+      "item": [
+        {
+          "name": "Create / Update Budget",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/budget",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "budget"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"month\": 4,\n  \"year\": 2026,\n  \"entries\": [\n    {\n      \"type\": \"income\",\n      \"category\": \"Maaş\",\n      \"amount\": 45000,\n      \"is_fixed\": true,\n      \"is_loan_payment\": false,\n      \"note\": \"Aylık net maaş\"\n    },\n    {\n      \"type\": \"income\",\n      \"category\": \"Kira Geliri\",\n      \"amount\": 8000,\n      \"is_fixed\": true,\n      \"is_loan_payment\": false,\n      \"note\": null\n    },\n    {\n      \"type\": \"expense\",\n      \"category\": \"Kira\",\n      \"amount\": 12000,\n      \"is_fixed\": true,\n      \"is_loan_payment\": false,\n      \"note\": \"Ev kirası\"\n    },\n    {\n      \"type\": \"expense\",\n      \"category\": \"Market\",\n      \"amount\": 5000,\n      \"is_fixed\": false,\n      \"is_loan_payment\": false,\n      \"note\": null\n    },\n    {\n      \"type\": \"expense\",\n      \"category\": \"Kredi Taksiti\",\n      \"amount\": 8000,\n      \"is_fixed\": true,\n      \"is_loan_payment\": true,\n      \"note\": \"Araç kredisi\"\n    },\n    {\n      \"type\": \"expense\",\n      \"category\": \"Faturalar\",\n      \"amount\": 2500,\n      \"is_fixed\": true,\n      \"is_loan_payment\": false,\n      \"note\": \"Elektrik, su, internet\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Latest Budget",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/budget/latest",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "budget",
+                "latest"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Health Score (Finansal Analiz)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/budget/analysis",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "budget",
+                "analysis"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🎯 Goals",
+      "item": [
+        {
+          "name": "Get All Goals",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/goals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "goals"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Goal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.id) {",
+                  "  pm.collectionVariables.set('goal_id', json.data.id);",
+                  "  console.log('Goal ID saved:', json.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/goals",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "goals"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Acil Durum Fonu\",\n  \"category\": \"acil_fon\",\n  \"description\": \"3 aylık gideri karşılayacak acil fon\",\n  \"target_amount\": 82500,\n  \"current_amount\": 15000,\n  \"monthly_target\": 5000,\n  \"deadline\": \"2026-12-31\",\n  \"is_completed\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Goal",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/goals/{{goal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "goals",
+                "{{goal_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current_amount\": 20000,\n  \"monthly_target\": 6000,\n  \"is_completed\": false\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete Goal",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/goals/{{goal_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "goals",
+                "{{goal_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🤖 Credit Analysis",
+      "item": [
+        {
+          "name": "Analyze Credit - Approved Scenario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/credit/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "credit",
+                "analyze"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loan_amount\": 50000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araba\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 750,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": true,\n  \"months_employed\": 60,\n  \"income_override\": 85000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.analysis_id) {",
+                  "  pm.collectionVariables.set('analysis_id', json.data.analysis_id);",
+                  "  console.log('Analysis ID saved:', json.data.analysis_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Analyze Credit - Rejected Scenario (Counterfactual Test)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/credit/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "credit",
+                "analyze"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"loan_amount\": 350000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araba\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 650,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": false,\n  \"months_employed\": 60,\n  \"income_override\": 50000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.data && json.data.analysis_id) {",
+                  "  pm.collectionVariables.set('analysis_id', json.data.analysis_id);",
+                  "  console.log('Analysis ID saved:', json.data.analysis_id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Explain Credit (AI)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/credit/explain",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "credit",
+                "explain"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"analysis_id\": \"{{analysis_id}}\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🔔 Alerts",
+      "item": [
+        {
+          "name": "Get Alerts (Aktif)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alerts/?include_dismissed=false",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "include_dismissed",
+                  "value": "false"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Alerts (Tümü - dismissed dahil)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alerts/?include_dismissed=true",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts",
+                ""
+              ],
+              "query": [
+                {
+                  "key": "include_dismissed",
+                  "value": "true"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Alert as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alerts/{{alert_id}}/read",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alert_id}}",
+                "read"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Dismiss Alert",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/alerts/{{alert_id}}/dismiss",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alert_id}}",
+                "dismiss"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "💬 Chat",
+      "item": [
+        {
+          "name": "Get Chat History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                ""
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/chat/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "chat",
+                ""
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Kredi notum 680, ev kredisi almak istiyorum. Ne önerirsin?\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Simulator",
+      "item": [
+        {
+          "name": "Loan Simulation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/simulator/loan",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "simulator",
+                "loan"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 250000,\n  \"months\": 60,\n  \"interest_rate\": 0.032,\n  \"current_income\": 53000,\n  \"current_debt_payments\": 8000\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📈 Investment",
+      "item": [
+        {
+          "name": "Get Investment Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/investment/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "investment",
+                "profile"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Investment Profile",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/investment/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "investment",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    { \"question_id\": \"q1_risk_tolerance\", \"answer_value\": 3 },\n    { \"question_id\": \"q2_investment_horizon\", \"answer_value\": 4 },\n    { \"question_id\": \"q3_loss_reaction\", \"answer_value\": 2 },\n    { \"question_id\": \"q4_income_stability\", \"answer_value\": 4 },\n    { \"question_id\": \"q5_experience\", \"answer_value\": 2 }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Investment Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/investment/profile",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "investment",
+                "profile"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    { \"question_id\": \"q1_risk_tolerance\", \"answer_value\": 5 },\n    { \"question_id\": \"q2_investment_horizon\", \"answer_value\": 5 },\n    { \"question_id\": \"q3_loss_reaction\", \"answer_value\": 4 },\n    { \"question_id\": \"q4_income_stability\", \"answer_value\": 5 },\n    { \"question_id\": \"q5_experience\", \"answer_value\": 4 }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📋 Report",
+      "item": [
+        {
+          "name": "Generate Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/report/generate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "report",
+                "generate"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"month\": 4,\n  \"year\": 2026\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Report (year/month)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/report/2026/4",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "report",
+                "2026",
+                "4"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏥 System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/health",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

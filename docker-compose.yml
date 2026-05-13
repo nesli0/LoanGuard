@@ -1,0 +1,79 @@
+# ============================================================
+# LoanGuard — Docker Compose
+# Kullanım: docker compose up --build
+#
+# ⚠️  Başlamadan önce:
+#   1. backend/.env dosyasını backend/.env.example'dan oluştur
+#   2. models/ klasörüne .joblib dosyalarını Google Drive'dan indir
+#   3. data/interim/loans_cleaned.csv dosyasını yerleştir
+# ============================================================
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: loanguard_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-Loanguard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data   # veriyi sil/yeniden başlat → kayıp yok
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/schema.sql  # ilk açılışta otomatik çalışır
+    ports:
+      - "5432:5432"    # DBeaver vs. ile localde bağlanmak istersen
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-Loanguard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI Backend ─────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: loanguard_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy   # DB hazır olmadan API başlamaz
+    env_file:
+      - ./backend/.env               # DATABASE_URL, JWT_SECRET_KEY, GEMINI_API vb.
+    environment:
+      # container içinde DB host adı "db" (servis adı), localhost değil
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Loanguard}
+    volumes:
+      - ./backend/src:/app/backend/src  # hot-reload için backend kaynak kodu
+      - ./src:/app/src                  # ML kaynak kodu → credit_loader'ın parents[4]="app/" ile eşleşir
+      - ./models:/app/models            # .joblib model dosyaları (Drive'dan indirilmeli)
+      - ./data:/app/data                # loans_cleaned.csv için
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── React/Vite Frontend ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: loanguard_frontend
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy   # API hazır olmadan frontend başlamaz
+    environment:
+      VITE_API_URL: http://localhost:8000/api/v1
+    volumes:
+      - ./frontend/src:/app/src        # hot-reload için frontend kaynak kodu
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:
+    name: loanguard_postgres_data
