@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { Loader2, ArrowRight, ShieldCheck, Info, Sparkles } from 'lucide-react'
 import {
   RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer,
@@ -17,12 +17,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { BudgetGuard } from '@/components/shared/BudgetGuard'
 import type { ApiResponse } from '@/types'
 
 const schema = z.object({
-  loan_amount: z.coerce.number().min(1000, 'Minimum 1000 TL olmalıdır'),
-  loan_term: z.coerce.number().min(1, 'Vade seçiniz'),
-  interest_rate: z.coerce.number().min(0).max(1, '0 ile 1 arasında olmalıdır (örn: %32 için 0.32)'),
+  income_override: z.coerce.number().optional(),
+  loan_amount: z.coerce.number().min(1000, 'Minimum ₺1.000'),
+  loan_term: z.coerce.number().min(6, 'Minimum 6 ay').max(120),
+  interest_rate: z.coerce.number().min(0.001, "0'dan büyük olmalı").max(1, '0 ile 1 arasında olmalıdır'),
   credit_score: z.coerce.number().min(300).max(850, '300 ile 850 arasında olmalıdır'),
   num_credit_lines: z.coerce.number().min(0, '0 veya daha büyük olmalıdır'),
   has_mortgage: z.boolean(),
@@ -37,14 +39,42 @@ export function CreditPage() {
   const [result, setResult] = useState<any | null>(null)
   const [aiExplanation, setAiExplanation] = useState<string | null>(null)
 
+  const { data: budgetRes } = useQuery({
+    queryKey: ['budget-latest'],
+    queryFn: async () => {
+      const res = await api.get<ApiResponse<any>>('/budget/latest')
+      return res.data.data
+    },
+  })
+
+  const totalIncome = budgetRes?.entries?.reduce((acc: number, curr: any) =>
+    curr.type === 'income' ? acc + Number(curr.amount) : acc
+  , 0) || 0
+
+  const totalExpense = budgetRes?.entries?.reduce((acc: number, curr: any) =>
+    curr.type === 'expense' ? acc + Number(curr.amount) : acc
+  , 0) || 0
+
+  // **bold** ve *italic* markdown işaretlerini JSX'e çevirir
+  const renderMarkdown = (text: string) => {
+    const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+      if (part.startsWith('*') && part.endsWith('*')) return <em key={i}>{part.slice(1, -1)}</em>
+      return <span key={i}>{part}</span>
+    })
+  }
+
   const {
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors }
   } = useForm<FormData>({
     resolver: zodResolver(schema) as any,
     defaultValues: {
+      income_override: 0,
       loan_amount: 50000,
       loan_term: 24,
       interest_rate: 0.32,
@@ -56,6 +86,12 @@ export function CreditPage() {
       loan_purpose: '',
     }
   })
+
+  useEffect(() => {
+    if (totalIncome > 0) {
+      setValue('income_override', totalIncome)
+    }
+  }, [totalIncome, setValue])
 
   const { mutate: explainMutate, isPending: isExplaining } = useMutation({
     mutationFn: async (analysisId: string) => {
@@ -89,6 +125,7 @@ export function CreditPage() {
   }
 
   return (
+    <BudgetGuard message="Kredi analizi yapabilmek için önce bütçe bilgilerinizi girmeniz gerekiyor.">
     <div className="max-w-7xl mx-auto space-y-6 pb-20 animate-in fade-in duration-300">
       
       <div className="flex items-center justify-between bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
@@ -105,6 +142,24 @@ export function CreditPage() {
           <form onSubmit={handleSubmit((d) => mutate(d))} className="space-y-6">
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              {/* Aylık Gelir (Bütçeden) */}
+              <div className="space-y-1.5">
+                <Label htmlFor="income_override">Aylık Gelir (₺)</Label>
+                <div className="relative">
+                  <Input id="income_override" type="number" {...register('income_override')} />
+                  <Badge variant="outline" className="absolute right-2 top-2 text-[10px] bg-[#F8FAFC] text-[#64748B]">Bütçeden</Badge>
+                </div>
+                <p className="text-[10px] text-[#94A3B8] leading-relaxed">
+                  Bankacılık standardı: brüt gelir kullanılır, giderler DTI oranına yansır.
+                  {totalExpense > 0 && (
+                    <span className="ml-1 text-[#64748B] font-medium">
+                      Net: ₺{(totalIncome - totalExpense).toLocaleString('tr-TR')}
+                    </span>
+                  )}
+                </p>
+                {errors.income_override && <span className="text-xs text-[#DC2626]">{errors.income_override.message}</span>}
+              </div>
+
               {/* Kredi Tutarı */}
               <div className="space-y-1.5">
                 <Label htmlFor="loan_amount">Kredi Tutarı (₺)</Label>
@@ -316,8 +371,8 @@ export function CreditPage() {
                     </div>
                   ) : aiExplanation ? (
                     <div className="p-5 rounded-lg border border-[#E9D5FF] bg-[#FAF5FF]">
-                      <p className="text-sm leading-relaxed text-[#3B0764] whitespace-pre-line">
-                        {aiExplanation}
+                      <p className="text-sm leading-relaxed text-[#3B0764]">
+                        {renderMarkdown(aiExplanation)}
                       </p>
                     </div>
                   ) : (
@@ -347,5 +402,6 @@ export function CreditPage() {
 
       </div>
     </div>
+    </BudgetGuard>
   )
 }

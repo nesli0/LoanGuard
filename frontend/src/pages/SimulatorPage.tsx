@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSkeleton } from '@/components/shared/LoadingSkeleton'
+import { BudgetGuard } from '@/components/shared/BudgetGuard'
 import type { ApiResponse } from '@/types'
 
 // Use a custom simple slider that matches the design since shadcn slider wasn't fully created
@@ -53,8 +54,8 @@ export function SimulatorPage() {
           current_income: analysisRes.details.total_income || 1, // avoid division by zero
           current_debt_payments: analysisRes.details.loan_payments || 0,
         }
-        const res = await api.post('/simulator/loan', payload)
-        setResult(res.data)
+        const res = await api.post<ApiResponse<any>>('/simulator/loan', payload)
+        setResult(res.data.data)
       } catch (error) {
         console.error('Simülasyon hatası:', error)
       }
@@ -63,14 +64,33 @@ export function SimulatorPage() {
     return () => clearTimeout(timer)
   }, [amount, months, interestRate, analysisRes])
 
-  if (isAnalysisLoading) return <LoadingSkeleton type="cards" cards={2} />
+  if (isAnalysisLoading) return <LoadingSkeleton type="form" rows={4} />
 
   return (
+    <BudgetGuard message="Simülatörü kullanabilmek için önce bütçe bilgilerinizi girmeniz gerekiyor.">
     <div className="max-w-5xl mx-auto space-y-8 pb-12 animate-in fade-in duration-300">
       
-      <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
-        <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">Kredi Simülatörü</h1>
-        <p className="text-sm text-[#64748B]">Farklı senaryolarda bütçenizin nasıl etkileneceğini anında görün.</p>
+      <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex justify-between items-center">
+        <div>
+          <h1 className="text-xl font-bold text-[#0F172A] tracking-tight">Kredi Simülatörü</h1>
+          <p className="text-sm text-[#64748B]">Farklı senaryolarda bütçenizin nasıl etkileneceğini anında görün.</p>
+        </div>
+        <div className="flex gap-4">
+           <div className="space-y-1">
+             <Label className="text-xs text-[#64748B]">Aylık Gelir</Label>
+             <div className="relative">
+               <Input value={formatCurrency(analysisRes?.details?.total_income || 0)} readOnly className="h-8 text-sm bg-[#F8FAFC] border-dashed pr-24" />
+               <Badge variant="outline" className="absolute right-1 top-1 text-[9px] bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]">Bütçeden alındı</Badge>
+             </div>
+           </div>
+           <div className="space-y-1">
+             <Label className="text-xs text-[#64748B]">Mevcut Borç Ödemesi</Label>
+             <div className="relative">
+               <Input value={formatCurrency(analysisRes?.details?.loan_payments || 0)} readOnly className="h-8 text-sm bg-[#F8FAFC] border-dashed pr-24" />
+               <Badge variant="outline" className="absolute right-1 top-1 text-[9px] bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]">Bütçeden alındı</Badge>
+             </div>
+           </div>
+        </div>
       </div>
 
       {/* 1. Üst Panel - Sliderlar */}
@@ -205,5 +225,6 @@ export function SimulatorPage() {
       )}
 
     </div>
+    </BudgetGuard>
   )
 }

@@ -24,8 +24,6 @@ class Profile(SQLModel, table=True):
     education: str | None = None         # ilkokul | lise | üniversite | yükseklisans
     dependents: int = Field(default=0)
     city: str | None = None
-    monthly_income: float | None = None
-    risk_tolerance: str | None = None    # Düşük | Orta | Yüksek
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),

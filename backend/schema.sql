@@ -145,10 +145,19 @@ CREATE TABLE IF NOT EXISTS credit_analyses (
   analyzed_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ========================= CHAT SESSIONS =========================
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+  title      VARCHAR DEFAULT 'Yeni Sohbet',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ========================= CHAT HISTORY =========================
 CREATE TABLE IF NOT EXISTS chat_history (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+  session_id UUID REFERENCES chat_sessions(id) ON DELETE CASCADE,
 
   role       TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system')),
   content    TEXT NOT NULL,

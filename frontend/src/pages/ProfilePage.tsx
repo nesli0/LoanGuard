@@ -25,9 +25,6 @@ const profileSchema = z.object({
   education: z.string().min(1, 'Eğitim durumu seçin'),
   dependents: z.coerce.number().min(0).max(10, 'En fazla 10 olabilir'),
   marital_status: z.string().min(1, 'Medeni durum seçin'),
-  
-  monthly_income: z.coerce.number().min(0, 'Geçerli bir gelir girin').optional(),
-  risk_tolerance: z.string().optional(),
 })
 
 type ProfileFormData = z.infer<typeof profileSchema>
@@ -35,12 +32,13 @@ type ProfileFormData = z.infer<typeof profileSchema>
 const STEPS = [
   { id: 1, title: 'Kişisel Bilgiler' },
   { id: 2, title: 'İş Bilgileri' },
-  { id: 3, title: 'Gelir Bilgisi' },
-  { id: 4, title: 'Özet' },
+  { id: 3, title: 'Özet' },
 ]
 
 export function ProfilePage() {
   const [currentStep, setCurrentStep] = useState(1)
+  const [isEditing, setIsEditing] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const queryClient = useQueryClient()
   const location = useLocation()
   const navigate = useNavigate()
@@ -79,20 +77,37 @@ export function ProfilePage() {
         education: profileRes.education || '',
         dependents: profileRes.dependents ?? 0,
         marital_status: profileRes.marital_status || '',
-        monthly_income: profileRes.monthly_income || undefined,
-        risk_tolerance: profileRes.risk_tolerance || '',
       })
+      if (profileRes.first_name && !isOnboarding) {
+        setIsEditing(false)
+      } else {
+        setIsEditing(true)
+      }
     }
-  }, [profileRes, reset])
+  }, [profileRes, reset, isOnboarding])
 
   const mutation = useMutation({
     mutationFn: async (data: ProfileFormData) => {
       const res = await api.put('/profile', data)
       return res.data
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] })
-      navigate('/dashboard')
+    onSuccess: (responseData) => {
+      const newProfile = responseData.data;
+      // Synchronously update cache to prevent AppLayout from redirecting back to /profile
+      queryClient.setQueryData(['profile'], newProfile)
+      queryClient.setQueryData(['profile-check'], newProfile)
+      
+      if (isOnboarding) {
+        setShowSuccess(true)
+        setTimeout(() => {
+          navigate('/dashboard')
+        }, 1500)
+      } else {
+        setShowSuccess(true)
+        setIsEditing(false)
+        setCurrentStep(1)
+        setTimeout(() => setShowSuccess(false), 5000) // 5 saniye sonra gizle
+      }
     }
   })
 
@@ -101,11 +116,10 @@ export function ProfilePage() {
     
     if (currentStep === 1) fieldsToValidate = ['first_name', 'last_name', 'age', 'city']
     if (currentStep === 2) fieldsToValidate = ['employment_type', 'education', 'dependents', 'marital_status']
-    if (currentStep === 3) fieldsToValidate = ['monthly_income', 'risk_tolerance']
     
     const isValid = await trigger(fieldsToValidate)
     if (isValid) {
-      setCurrentStep(s => Math.min(s + 1, 4))
+      setCurrentStep(s => Math.min(s + 1, 3))
     }
   }
 
@@ -114,6 +128,10 @@ export function ProfilePage() {
   }
 
   const onSubmit = (data: ProfileFormData) => {
+    if (currentStep < 3) {
+      handleNext()
+      return
+    }
     mutation.mutate(data)
   }
 
@@ -131,10 +149,43 @@ export function ProfilePage() {
             <AlertDescription className="font-medium">Sistemi kullanmaya başlamak için lütfen profilinizi tamamlayın.</AlertDescription>
           </Alert>
         )}
-        <h1 className="text-2xl font-bold text-[#0F172A] mb-8">Profil Ayarları</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-2xl font-bold text-[#0F172A]">Profil Ayarları</h1>
+          {!isEditing && profileRes?.first_name && (
+            <Button type="button" onClick={() => { setIsEditing(true); setShowSuccess(false); }} variant="outline" className="border-[#0A2540] text-[#0A2540]">
+              Profili Düzenle
+            </Button>
+          )}
+        </div>
         
-        {/* Stepper Header */}
-        <div className="mb-8">
+        {showSuccess && (
+          <Alert variant="success" className="mb-6 bg-[#ECFDF5] border-[#A7F3D0] text-[#059669] animate-in fade-in">
+            <AlertDescription className="font-medium">Profiliniz başarıyla güncellendi!</AlertDescription>
+          </Alert>
+        )}
+
+        {mutation.isError && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertDescription>Profil güncellenirken bir hata oluştu.</AlertDescription>
+          </Alert>
+        )}
+        
+        {!isEditing && profileRes?.first_name ? (
+          <div className="bg-[#F8FAFC] rounded-lg p-6 border border-[#E2E8F0] space-y-4 animate-in fade-in">
+            <h3 className="font-semibold text-[#0F172A] border-b pb-3 mb-4">Mevcut Profil Bilgileriniz</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-8 text-sm">
+              <div><span className="text-[#64748B] block mb-1">Ad Soyad</span><span className="font-medium text-[#0F172A] text-base">{profileRes.first_name} {profileRes.last_name}</span></div>
+              <div><span className="text-[#64748B] block mb-1">Yaş / Şehir</span><span className="font-medium text-[#0F172A] text-base">{profileRes.age} / {profileRes.city}</span></div>
+              <div><span className="text-[#64748B] block mb-1">Çalışma Durumu</span><span className="font-medium text-[#0F172A] text-base">{profileRes.employment_type}</span></div>
+              <div><span className="text-[#64748B] block mb-1">Eğitim</span><span className="font-medium text-[#0F172A] text-base">{profileRes.education}</span></div>
+              <div><span className="text-[#64748B] block mb-1">Medeni Durum</span><span className="font-medium text-[#0F172A] text-base">{profileRes.marital_status}</span></div>
+              <div><span className="text-[#64748B] block mb-1">Bağımlı Kişi</span><span className="font-medium text-[#0F172A] text-base">{profileRes.dependents}</span></div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Stepper Header */}
+            <div className="mb-8">
           <div className="flex items-center justify-between relative z-10 px-2">
             {STEPS.map((step) => {
               const isCompleted = currentStep > step.id
@@ -166,17 +217,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {mutation.isError && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertDescription>Profil güncellenirken bir hata oluştu.</AlertDescription>
-          </Alert>
-        )}
-        
-        {mutation.isSuccess && (
-          <Alert variant="success" className="mb-6 bg-[#ECFDF5] border-[#A7F3D0] text-[#059669]">
-            <AlertDescription>Profiliniz başarıyla güncellendi!</AlertDescription>
-          </Alert>
-        )}
+
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           
@@ -283,42 +324,8 @@ export function ProfilePage() {
             </div>
           </div>
 
-          {/* Adım 3: Gelir Bilgisi */}
+          {/* Adım 3: Özet */}
           <div className={currentStep === 3 ? 'block animate-in slide-in-from-right-4' : 'hidden'}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label htmlFor="monthly_income">Aylık Gelir</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B]">₺</span>
-                  <Input id="monthly_income" type="number" {...register('monthly_income')} className="pl-8" />
-                </div>
-                {errors.monthly_income && <span className="text-xs text-[#DC2626]">{errors.monthly_income.message}</span>}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Risk Toleransı</Label>
-                <Controller
-                  name="risk_tolerance"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seçiniz" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Düşük">Düşük</SelectItem>
-                        <SelectItem value="Orta">Orta</SelectItem>
-                        <SelectItem value="Yüksek">Yüksek</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Adım 4: Özet */}
-          <div className={currentStep === 4 ? 'block animate-in slide-in-from-right-4' : 'hidden'}>
             <div className="bg-[#F8FAFC] rounded-lg p-5 border border-[#E2E8F0] space-y-4">
               <h3 className="font-semibold text-[#0F172A] border-b pb-2">Girdiğiniz Bilgilerin Özeti</h3>
               
@@ -337,12 +344,6 @@ export function ProfilePage() {
                 
                 <div className="text-[#64748B]">Medeni Durum:</div>
                 <div className="font-medium text-[#0F172A]">{values.marital_status} ({values.dependents} Bağımlı)</div>
-                
-                <div className="text-[#64748B]">Aylık Gelir:</div>
-                <div className="font-medium text-[#0F172A]">₺{values.monthly_income || 0}</div>
-                
-                <div className="text-[#64748B]">Risk Toleransı:</div>
-                <div className="font-medium text-[#0F172A]">{values.risk_tolerance || '-'}</div>
               </div>
             </div>
           </div>
@@ -358,18 +359,30 @@ export function ProfilePage() {
               <ChevronLeft className="w-4 h-4 mr-1" /> Geri
             </Button>
             
-            {currentStep < 4 ? (
-              <Button type="button" onClick={handleNext} className="bg-[#0A2540] hover:bg-[#1B4F8A]">
+            {currentStep < 3 ? (
+              <Button 
+                key="next-btn"
+                type="button" 
+                onClick={handleNext}
+                className="bg-[#0A2540] hover:bg-[#1B4F8A]"
+              >
                 İleri <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             ) : (
-              <Button type="submit" className="bg-[#2D9CDB] hover:bg-[#1B84C3]" disabled={mutation.isPending}>
+              <Button 
+                key="save-btn"
+                type="submit" 
+                className="bg-[#2D9CDB] hover:bg-[#1B84C3]" 
+                disabled={mutation.isPending}
+              >
                 {mutation.isPending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Kaydediliyor...</> : 'Kaydet'}
               </Button>
             )}
           </div>
 
         </form>
+        </>
+        )}
       </div>
     </div>
   )

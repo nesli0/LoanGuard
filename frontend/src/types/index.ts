@@ -66,6 +66,14 @@ export interface BudgetEntryCreate {
   note?: string
 }
 
+export interface BudgetEntryUpdate {
+  category?: string
+  amount?: number
+  is_fixed?: boolean
+  is_loan_payment?: boolean
+  note?: string
+}
+
 export interface BudgetPeriodRequest {
   month: number
   year: number

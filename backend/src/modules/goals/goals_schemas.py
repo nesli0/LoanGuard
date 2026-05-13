@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 class GoalBase(BaseModel):
     title: str = Field(..., description="Hedefin adı")
-    category: Literal["acil_fon", "tatil", "ev", "araç", "eğitim", "diğer"] | None = None
+    category: Literal["acil_fon", "tatil", "ev", "araba", "emeklilik", "eğitim", "diğer"] | None = None
     description: str | None = None
     target_amount: float = Field(..., gt=0)
     current_amount: float = Field(default=0.0, ge=0)
@@ -22,7 +22,7 @@ class GoalCreateRequest(GoalBase):
 
 class GoalUpdateRequest(BaseModel):
     title: str | None = None
-    category: Literal["acil_fon", "tatil", "ev", "araç", "eğitim", "diğer"] | None = None
+    category: Literal["acil_fon", "tatil", "ev", "araba", "emeklilik", "eğitim", "diğer"] | None = None
     description: str | None = None
     target_amount: float | None = Field(default=None, gt=0)
     current_amount: float | None = Field(default=None, ge=0)

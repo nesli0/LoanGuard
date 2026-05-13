@@ -14,6 +14,15 @@ class EntryCreate(BaseModel):
     note: str | None = Field(default=None, description="Not")
 
 
+class EntryUpdate(BaseModel):
+    """Partial update — sadece gönderilen alanlar güncellenir."""
+    category: str | None = Field(default=None)
+    amount: float | None = Field(default=None, gt=0)
+    is_fixed: bool | None = Field(default=None)
+    is_loan_payment: bool | None = Field(default=None)
+    note: str | None = Field(default=None)
+
+
 class BudgetPeriodRequest(BaseModel):
     month: int = Field(..., ge=1, le=12)
     year: int = Field(..., ge=2000, le=2100)

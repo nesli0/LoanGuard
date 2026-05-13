@@ -62,24 +62,32 @@ async def analyze_credit(
     )
     latest_period = latest_period_result.scalar_one_or_none()
 
-    monthly_income = 0.0
-    dti_ratio = 0.0
-
-    if latest_period:
-        entries_result = await db.execute(
-            select(FinancialEntry).where(FinancialEntry.period_id == latest_period.id)
+    if not latest_period:
+        raise AppException(
+            400,
+            "Kredi analizi yapabilmek için önce bütçe bilgilerinizi girmeniz gerekiyor.",
+            "BUDGET_REQUIRED",
+            data={"redirect": "/budget"}
         )
-        entries = entries_result.scalars().all()
 
-        total_income  = sum(e.amount for e in entries if e.type == "income")
-        loan_payments = sum(e.amount for e in entries if e.is_loan_payment)
+    entries_result = await db.execute(
+        select(FinancialEntry).where(FinancialEntry.period_id == latest_period.id)
+    )
+    entries = entries_result.scalars().all()
 
-        monthly_income = total_income
-        dti_ratio = round(loan_payments / total_income, 4) if total_income > 0 else 0.0
+    total_income  = sum(e.amount for e in entries if e.type == "income")
+    loan_payments = sum(e.amount for e in entries if e.is_loan_payment)
 
-    # Bütçe girişi yoksa profildeki monthly_income'u fallback olarak kullan
-    if monthly_income == 0.0 and profile.monthly_income:
-        monthly_income = float(profile.monthly_income)
+    if total_income == 0.0:
+        raise AppException(
+            400,
+            "Kredi analizi yapabilmek için önce bütçe bilgilerinizi girmeniz gerekiyor.",
+            "BUDGET_REQUIRED",
+            data={"redirect": "/budget"}
+        )
+
+    monthly_income = total_income
+    dti_ratio = round(loan_payments / total_income, 4) if total_income > 0 else 0.0
 
     # ── 3. ML Pipeline ─────────────────────────────────────────────
     result = await credit_service.analyze_credit(

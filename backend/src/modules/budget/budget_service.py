@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.exceptions import AppException
 from src.models.financial_model import FinancialEntry, FinancialPeriod
-from src.modules.budget.budget_schemas import BudgetPeriodRequest
+from src.modules.budget.budget_schemas import BudgetPeriodRequest, EntryUpdate
 from src.modules.alerts import alerts_service
 
 
@@ -34,6 +34,58 @@ async def get_entries_for_period(db: AsyncSession, period_id: uuid.UUID) -> list
         select(FinancialEntry).where(FinancialEntry.period_id == period_id)
     )
     return list(result.scalars().all())
+
+
+async def get_period_with_entries(
+    db: AsyncSession, user_id: uuid.UUID, month: int, year: int
+) -> tuple[FinancialPeriod | None, list[FinancialEntry]]:
+    """Seçilen ay/yılın dönemini ve entry listesini döner. Dönem yoksa (None, []) döner."""
+    period = await get_period(db, user_id, month, year)
+    if not period:
+        return None, []
+    entries = await get_entries_for_period(db, period.id)
+    return period, entries
+
+
+async def update_entry(
+    db: AsyncSession, entry_id: uuid.UUID, user_id: uuid.UUID, data: EntryUpdate
+) -> FinancialEntry:
+    """Tek bir bütçe kalemini partial olarak günceller. Kullanıcı sahipliği doğrulanır."""
+    result = await db.execute(
+        select(FinancialEntry)
+        .join(FinancialPeriod, FinancialEntry.period_id == FinancialPeriod.id)
+        .where(FinancialEntry.id == entry_id)
+        .where(FinancialPeriod.user_id == user_id)
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise AppException(404, "Bütçe kalemi bulunamadı.")
+
+    update_data = data.model_dump(exclude_none=True)
+    for field, value in update_data.items():
+        setattr(entry, field, value)
+
+    await db.commit()
+    await db.refresh(entry)
+    return entry
+
+
+async def delete_entry(
+    db: AsyncSession, entry_id: uuid.UUID, user_id: uuid.UUID
+) -> None:
+    """Tek bir bütçe kalemini siler. Kullanıcı sahipliği doğrulanır."""
+    result = await db.execute(
+        select(FinancialEntry)
+        .join(FinancialPeriod, FinancialEntry.period_id == FinancialPeriod.id)
+        .where(FinancialEntry.id == entry_id)
+        .where(FinancialPeriod.user_id == user_id)
+    )
+    entry = result.scalar_one_or_none()
+    if not entry:
+        raise AppException(404, "Bütçe kalemi bulunamadı.")
+
+    await db.delete(entry)
+    await db.commit()
 
 
 async def create_or_update_budget(db: AsyncSession, user_id: uuid.UUID, data: BudgetPeriodRequest) -> FinancialPeriod:

@@ -15,14 +15,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # }
 # ────────────────────────────────────────────────────────────────────
 
-def _error_response(status: int, message: str, error_code: str = "") -> JSONResponse:
+def _error_response(status: int, message: str, error_code: str = "", data: dict | None = None) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         content={
             "success": False,
             "message": message,
             "error_code": error_code,
-            "data": None,
+            "data": data,
         },
     )
 
@@ -30,10 +30,11 @@ def _error_response(status: int, message: str, error_code: str = "") -> JSONResp
 class AppException(Exception):
     """Uygulama tarafından fırlatılan, kontrollü hata."""
 
-    def __init__(self, status: int, message: str, error_code: str = ""):
+    def __init__(self, status: int, message: str, error_code: str = "", data: dict | None = None):
         self.status = status
         self.message = message
         self.error_code = error_code
+        self.data = data
         super().__init__(message)
 
 
@@ -41,7 +42,7 @@ class AppException(Exception):
 
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     """AppException → düzgün hata yanıtı."""
-    return _error_response(exc.status, exc.message, exc.error_code)
+    return _error_response(exc.status, exc.message, exc.error_code, exc.data)
 
 
 async def http_exception_handler(

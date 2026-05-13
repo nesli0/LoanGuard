@@ -12,14 +12,11 @@ if hasattr(settings, "GEMINI_API") and settings.GEMINI_API:
 else:
     logger.warning("GEMINI_API key is not set in environment variables.")
 
-# Model configurations
-# We'll try to use flash for cost efficiency and speed. 
-# You can customize these constraints if needed.
 GENERATION_CONFIG = {
     "temperature": 0.7,
     "top_p": 0.9,
     "top_k": 40,
-    "max_output_tokens": 4096,
+    "max_output_tokens": 4096,  # Daha detaylı yanıtlar için sınır artırıldı
 }
 
 SAFETY_SETTINGS = {
@@ -29,95 +26,106 @@ SAFETY_SETTINGS = {
     HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
 }
 
-def get_model():
-    return genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
-        generation_config=GENERATION_CONFIG,
-        safety_settings=SAFETY_SETTINGS,
-    )
+def get_model(system_instruction: str = None):
+    kwargs = {
+        "model_name": "gemini-2.5-flash",
+        "generation_config": GENERATION_CONFIG,
+        "safety_settings": SAFETY_SETTINGS,
+    }
+    if system_instruction:
+        kwargs["system_instruction"] = system_instruction
+    return genai.GenerativeModel(**kwargs)
 
 
 async def generate_credit_explanation(analysis_data: dict) -> str:
     """
-    Generates an explanation for a credit analysis result using Gemini.
+    Kredi analiz sonucunu sade Türkçeyle açıklar.
+    Kesinlikle markdown formatı kullanmaz (**, *, # vb.).
     """
-    model = get_model()
-    
-    # Format the variables for the prompt
+    system_instruction = "Sen yetkin bir LoanGuard finansal danışmanısın. Cevaplarını her zaman doğal ve akıcı bir paragrafla, tam olarak tamamlanmış cümlelerle bitir."
+    model = get_model(system_instruction=system_instruction)
+
     probability = round(analysis_data.get("approval_probability", 0.0) * 100, 2)
-    approved = "Onaylandı" if probability >= 50 else "Reddedildi"
-    
-    # Safely convert SHAP and Counterfactual data to readable string
-    shap_factors = json.dumps(analysis_data.get("shap_factors", {}), ensure_ascii=False, indent=2)
-    counterfactuals = json.dumps(analysis_data.get("counterfactuals", {}), ensure_ascii=False, indent=2)
+    approved = "Onaylanabilir" if probability >= 50 else "Reddedilebilir"
 
-    prompt = f"""Sen LoanGuard'ın finansal danışmanısın.
-Kullanıcıya kredi analizi sonucunu sade Türkçeyle açıkla. Jargon kullanma.
+    shap_factors = json.dumps(analysis_data.get("shap_factors", {}), ensure_ascii=False)
+    counterfactuals = json.dumps(analysis_data.get("counterfactuals", {}), ensure_ascii=False)
 
-Analiz Sonucu:
-- Onaylanma ihtimali: {probability}%
-- Karar: {approved}
-- En etkili faktörler: {shap_factors}
+    prompt = f"""Kredi analiz sonucunu kullanıcıya sade ve anlaşılır bir Türkçeyle açıkla.
+
+Kurallar:
+- Basit ve düz metin kullan. Vurgular için büyük harf veya basit tire (-) ile liste yapabilirsin.
+- Jargon kullanmadan samimi bir dil tercih et.
+
+Veri:
+- Onaylanma ihtimali: %{probability} ({approved})
+- Etkili faktörler: {shap_factors}
 - Öneriler: {counterfactuals}
-
-Kullanıcıya şunları söyle:
-1. Sonucu sade dille açıkla
-2. Neden bu sonucu aldığını anlat
-3. Ne yapması gerektiğini söyle
 """
     try:
         response = await model.generate_content_async(prompt)
-        return response.text
+        return response.text.strip()
     except Exception as e:
         logger.error(f"Error generating credit explanation: {e}")
-        return "Sistemde bir hata oluştu ve analiziniz yapay zeka tarafından şu an açıklanamıyor. Lütfen daha sonra tekrar deneyin."
+        return "Şu an açıklama oluşturulamıyor. Lütfen daha sonra tekrar deneyin."
 
 
 async def generate_financial_advice(user_data: dict, user_message: str, chat_history: list[dict] = None) -> str:
     """
-    Generates personal financial advice using Gemini.
+    Kişisel finansal tavsiye üretir. Sade, markdown içermeyen yanıtlar.
     """
-    model = get_model()
-    
-    age = user_data.get("age", "Bilinmiyor")
-    city = user_data.get("city", "Bilinmiyor")
-    income = user_data.get("income", 0.0)
-    expense = user_data.get("expense", 0.0)
-    savings_rate = user_data.get("savings_rate", 0.0)
-    health_score = user_data.get("health_score", 0.0)
-    goals = user_data.get("goals", "Belirtilmemiş")
-    risk_level = user_data.get("risk_level", "Bilinmiyor")
-    
-    system_prompt = f"""Sen LoanGuard'ın kişisel finansal danışmanısın.
-Kullanıcının verilerine göre kişisel tavsiye ver. Genel tavsiye verme, sadece bu kişiye özel konuş.
+    has_budget = user_data.get("has_budget", False)
 
-Kullanıcı Profili:
-- Yaş: {age}, Şehir: {city}
-- Gelir: {income} TL, Gider: {expense} TL
-- Tasarruf oranı: %{savings_rate}
-- Finansal sağlık skoru: {health_score}/100
-- Hedefler: {goals}
-- Yatırım profili: {risk_level}
-"""
-    
+    if not has_budget:
+        system_prompt = (
+            "Sen LoanGuard finansal danışmanısın. "
+            "Kullanıcı henüz bütçe girmemiş. "
+            "Onu bütçe girmeye yönlendir. "
+            "Sade ve anlaşılır bir dil kullan."
+        )
+    else:
+        system_prompt = f"""Sen LoanGuard finansal danışmanısın.
+
+Kullanıcı Verileri:
+- Profil: {user_data.get('profile_summary')}
+- Gelir: {user_data.get('income')} TL, Gider: {user_data.get('expense')} TL
+- Tasarruf oranı: %{user_data.get('savings_rate')}, Sağlık skoru: {user_data.get('health_score')}/100
+- Hedefler: {user_data.get('goals')}
+- Uyarılar: {user_data.get('alerts')}
+
+Yanıt kuralları:
+- Basit ve anlaşılır bir düz metin kullan, gerekirse maddeler için tire (-) kullanabilirsin.
+- Kullanıcıya doğal, açıklayıcı ve yardımsever bir şekilde yanıt ver. 
+- Bu kişiye özel konuş, genel tavsiye verme.
+- Samimi ve net ol."""
+
+    model = get_model(system_instruction=system_prompt)
+
     try:
-        # Build contents from history to maintain context
-        contents = [{"role": "user", "parts": [system_prompt]}]
-        
-        # If there is chat history, add it
+        contents = []
+
         if chat_history:
             for msg in chat_history:
-                # Map role: 'assistant' -> 'model', 'user' -> 'user'
                 role = "model" if msg.get("role") == "assistant" else "user"
-                # Skip system messages or invalid ones
-                if role in ["model", "user"]:
-                    contents.append({"role": role, "parts": [msg.get("content", "")]})
-        
-        # Add the current message
-        contents.append({"role": "user", "parts": [user_message]})
-        
+                content_text = msg.get("content", "").strip()
+                if not content_text:
+                    continue
+                
+                # Combine consecutive roles to avoid Gemini's InvalidArgument exception
+                if contents and contents[-1]["role"] == role:
+                    contents[-1]["parts"][0] += f"\n{content_text}"
+                else:
+                    contents.append({"role": role, "parts": [content_text]})
+
+        # Add user_message only if it's not already at the end of the combined history
+        if not contents or user_message.strip() not in contents[-1]["parts"][0]:
+            if contents and contents[-1]["role"] == "user":
+                contents[-1]["parts"][0] += f"\n{user_message}"
+            else:
+                contents.append({"role": "user", "parts": [user_message]})
+
         response = await model.generate_content_async(contents)
-        return response.text
+        return response.text.strip()
     except Exception as e:
         logger.error(f"Error generating financial advice: {e}")
-        return "Üzgünüm, şu an finansal analizimi tamamlayamıyorum. Lütfen daha sonra tekrar sorun."
+        return "Şu an yanıt veremiyorum. Lütfen daha sonra tekrar sorun."

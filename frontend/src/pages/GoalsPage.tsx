@@ -159,6 +159,7 @@ export function GoalsPage() {
                       <SelectItem value="araba">Araba</SelectItem>
                       <SelectItem value="tatil">Tatil</SelectItem>
                       <SelectItem value="emeklilik">Emeklilik</SelectItem>
+                      <SelectItem value="eğitim">Eğitim</SelectItem>
                       <SelectItem value="diğer">Diğer</SelectItem>
                     </SelectContent>
                   </Select>

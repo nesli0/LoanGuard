@@ -410,7 +410,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"loan_amount\": 50000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araç\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 750,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": true,\n  \"months_employed\": 60,\n  \"income_override\": 85000\n}"
+              "raw": "{\n  \"loan_amount\": 50000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araba\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 750,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": true,\n  \"months_employed\": 60,\n  \"income_override\": 85000\n}"
             }
           },
           "event": [
@@ -455,7 +455,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"loan_amount\": 350000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araç\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 650,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": false,\n  \"months_employed\": 60,\n  \"income_override\": 50000\n}"
+              "raw": "{\n  \"loan_amount\": 350000,\n  \"loan_term\": 36,\n  \"loan_purpose\": \"araba\",\n  \"interest_rate\": 0.125,\n  \"credit_score\": 650,\n  \"num_credit_lines\": 2,\n  \"has_mortgage\": false,\n  \"has_co_signer\": false,\n  \"months_employed\": 60,\n  \"income_override\": 50000\n}"
             }
           },
           "event": [
